@@ -124,7 +124,12 @@ export default function App() {
   const [dataSub, setDataSub] = useState([]); 
   const [dataPerdin, setDataPerdin] = useState([]); 
   
-  const currentMamin = dataMamin.filter(item => (item.tahun ? String(item.tahun) : '2026') === String(selectedYear));
+  const currentMamin = dataMamin
+    .filter(item => (item.tahun ? String(item.tahun) : '2026') === String(selectedYear))
+    .map(item => ({
+      ...item,
+      kategori_belanja: item.kategori_belanja || 'Makan Minum Rapat' // Penyelamat data lama
+    }));
   const currentSub = dataSub.filter(item => (item.tahun ? String(item.tahun) : '2026') === String(selectedYear));
   const currentPerdin = dataPerdin.filter(item => (item.tahun ? String(item.tahun) : '2026') === String(selectedYear));
 
