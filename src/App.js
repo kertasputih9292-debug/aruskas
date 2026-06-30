@@ -1054,7 +1054,7 @@ export default function App() {
                       </div>
 
                       <div className="flex flex-col gap-3">
-                        <button type="submit" disabled={loading || !formDynamic.sub_kegiatan} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-[0_8px_20px_rgb(59,130,246,0.25)] hover:shadow-[0_10px_25px_rgb(59,130,246,0.35)] hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none transition-all duration-300"><Send size={18} /> {isEditing ? 'Simpan Perubahan' : 'Kirim Realisasi'}</button>
+                        <button type="submit" disabled={loading || !formDynamic.sub_kegiatan} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-[0_8px_20px_rgb(59,130,246,0.25)] hover:shadow-[0_10px_25px_rgb(59,130,246,0.35)] hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none transition-all duration-300"><Send size={18} /> {isEditing ? 'Simpan Perubahan' : 'Save'}</button>
                         {isEditing && <button type="button" onClick={cancelEdit} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-4 px-6 rounded-2xl transition-all">Batal Edit</button>}
                       </div>
                     </form>
@@ -1186,7 +1186,7 @@ export default function App() {
 
                     <div className="flex flex-col gap-3 mt-8">
                       <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-[0_8px_20px_rgb(59,130,246,0.25)] hover:shadow-[0_10px_25px_rgb(59,130,246,0.35)] hover:-translate-y-0.5 transition-all duration-300">
-                        <Send size={18} /> Simpan Master Data
+                        <Send size={18} /> Save
                       </button>
                       {isEditing && <button type="button" onClick={cancelEdit} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-4 px-6 rounded-2xl transition-all">Batal Edit</button>}
                     </div>
@@ -1337,7 +1337,7 @@ export default function App() {
                     </div>
 
                     <div className="flex flex-col gap-3">
-                      <button type="submit" disabled={loading || !formMamin.sub_kegiatan} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-[0_8px_20px_rgb(59,130,246,0.25)] hover:shadow-[0_10px_25px_rgb(59,130,246,0.35)] hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none transition-all duration-300"><Send size={18} /> {isEditing ? 'Simpan Perubahan' : 'Kirim Realisasi'}</button>
+                      <button type="submit" disabled={loading || !formMamin.sub_kegiatan} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-[0_8px_20px_rgb(59,130,246,0.25)] hover:shadow-[0_10px_25px_rgb(59,130,246,0.35)] hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none transition-all duration-300"><Send size={18} /> {isEditing ? 'Simpan Perubahan' : 'Save'}</button>
                       {isEditing && <button type="button" onClick={cancelEdit} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-4 px-6 rounded-2xl transition-all">Batal Edit</button>}
                     </div>
                   </form>
@@ -1571,7 +1571,7 @@ export default function App() {
 
                       <div className="flex flex-col gap-3">
                         <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-[0_8px_20px_rgb(59,130,246,0.25)] hover:shadow-[0_10px_25px_rgb(59,130,246,0.35)] hover:-translate-y-0.5 transition-all duration-300">
-                          <Send size={18} /> {isEditing ? 'Simpan Perubahan' : 'Kirim Realisasi Perdin'}
+                          <Send size={18} /> {isEditing ? 'Simpan Perubahan' : 'Save'}
                         </button>
                         {isEditing && (
                           <button type="button" onClick={cancelEdit} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-4 px-6 rounded-2xl transition-all">Batal Edit</button>
@@ -1748,6 +1748,7 @@ export default function App() {
                     <table className="w-full text-left border-collapse min-w-[700px]">
                       <thead className="bg-slate-50/80 text-slate-400 text-[10px] uppercase tracking-widest font-black">
                         <tr>
+                          <th className="p-5 font-bold border-b border-slate-100 w-12 text-center">No</th>
                           <th className="p-5 font-bold border-b border-slate-100">Informasi & Lokasi</th>
                           <th className="p-5 font-bold w-64 border-b border-slate-100">Rincian Anggota</th>
                           <th className="p-5 text-right font-bold w-36 border-b border-slate-100">Total (Rp)</th>
@@ -1756,16 +1757,18 @@ export default function App() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {paginatedPerdinData.length === 0 ? (
-                          <tr><td colSpan="4" className="text-center p-12 text-slate-400 font-medium">Belum ada riwayat Perdin untuk filter ini di tahun {selectedYear}.</td></tr>
+                          <tr><td colSpan="5" className="text-center p-12 text-slate-400 font-medium">Belum ada riwayat Perdin untuk filter ini di tahun {selectedYear}.</td></tr>
                         ) : (
                           paginatedPerdinData.map((item, index) => {
                             let parsedPeserta = [];
                             try { parsedPeserta = JSON.parse(item.rincian_peserta); } catch(e){}
                             
                             const totalNominalReal = getPerdinTotal(item);
+                            const rowNumber = (currentPagePerdin - 1) * itemsPerPage + index + 1;
 
                             return (
                               <tr key={index} className="hover:bg-slate-50/80 transition-colors align-top group">
+                                <td className="p-5 text-center font-extrabold text-slate-400">{rowNumber}</td>
                                 <td className="p-5 min-w-[200px]">
                                   <div className="font-extrabold text-slate-700 text-sm md:text-base leading-snug break-words group-hover:text-indigo-600 transition-colors">{item.lokasi}</div>
                                   {item.tujuan && <div className="text-[11px] font-bold text-indigo-500 uppercase tracking-widest mt-1.5 leading-snug break-words">{item.tujuan}</div>}
