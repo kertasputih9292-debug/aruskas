@@ -1,14 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Wallet, Briefcase, Trash2, Edit, AlertCircle, Clock, Utensils, 
   Send, Plane, LayoutDashboard, Layers, ChevronRight, Menu, X, 
   ChevronDown, LogOut, PlusCircle, Filter, Calculator, BookOpen, 
   Pencil, Calendar, RefreshCw, Receipt, 
   Zap, PenTool, FileText, Router, Monitor, Banknote, Package, Server, Cloud, Printer, Scissors, Check, AlertTriangle,
-  MapPin, TrendingUp, CheckCircle, XCircle, Lightbulb, Eye, EyeOff
+  MapPin, TrendingUp, CheckCircle, XCircle, Lightbulb, Eye, EyeOff, ToggleLeft, ToggleRight
 } from 'lucide-react';
 
-// URL WEB APP GOOGLE SCRIPT SUDAH DIPERBARUI
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzFdFFd0-ekvC6di-RUXHBOvMMun67ytCBcrzORG-Ip0Q_I3oQb51Te3OvglHYPhxb-/exec';
 
 const toTitleCase = (str) => {
@@ -33,46 +32,57 @@ const getCategoryIcon = (name) => {
 };
 
 const AnimatedNominal = ({ value }) => {
-  const [currentValue, setCurrentValue] = useState(0);
+  const [displayValue, setDisplayValue] = useState(0);
+  const actualValueRef = useRef(0);
 
   useEffect(() => {
+    let animationFrameId;
     let startTimestamp = null;
-    const duration = 2000;
+    const duration = 1000;
     const targetValue = parseFloat(value) || 0;
+    const startValue = actualValueRef.current;
+
+    if (targetValue === startValue) {
+        setDisplayValue(targetValue);
+        return;
+    }
 
     const step = (timestamp) => {
       if (!startTimestamp) startTimestamp = timestamp;
       const progress = Math.min((timestamp - startTimestamp) / duration, 1);
       const easeOut = 1 - Math.pow(1 - progress, 3);
-      setCurrentValue(Math.floor(easeOut * targetValue));
+      
+      const nextValue = Math.floor(startValue + (targetValue - startValue) * easeOut);
+      setDisplayValue(nextValue);
+      actualValueRef.current = nextValue;
       
       if (progress < 1) {
-        window.requestAnimationFrame(step);
+        animationFrameId = window.requestAnimationFrame(step);
       } else {
-        setCurrentValue(targetValue);
+        setDisplayValue(targetValue);
+        actualValueRef.current = targetValue;
       }
     };
     
-    if (targetValue !== 0) {
-      window.requestAnimationFrame(step);
-    } else {
-      setCurrentValue(0);
-    }
+    animationFrameId = window.requestAnimationFrame(step);
+
+    return () => {
+      if (animationFrameId) window.cancelAnimationFrame(animationFrameId);
+    };
   }, [value]);
 
   const formatRp = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka || 0);
-  return <span>{formatRp(currentValue)}</span>;
+  return <span>{formatRp(displayValue)}</span>;
 };
 
-// --- KOMPONEN PROGRESS BAR VISUAL (GRAFIK SERAPAN) ---
 const ProgressBar = ({ realisasi, pagu }) => {
   const [width, setWidth] = useState(0);
   const percentValue = pagu > 0 ? (realisasi / pagu) * 100 : 0;
   const safePercent = Math.min(Math.max(percentValue, 0), 100);
   
-  let colorClass = 'bg-emerald-500'; // Aman (<50%)
-  if (percentValue >= 80) colorClass = 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'; // Kritis (>=80%)
-  else if (percentValue >= 50) colorClass = 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]'; // Waspada (>=50%)
+  let colorClass = 'bg-emerald-500'; 
+  if (percentValue >= 80) colorClass = 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'; 
+  else if (percentValue >= 50) colorClass = 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]'; 
 
   useEffect(() => {
     const timer = setTimeout(() => setWidth(safePercent), 300);
@@ -132,6 +142,11 @@ const getPerdinTotal = (item) => {
   return dbVal > 0 ? dbVal : calc;
 };
 
+const isRealized = (item) => {
+  if (item.status_realisasi === '0' || item.status_realisasi === false || item.status_realisasi === 'false') return false;
+  return true; 
+};
+
 export default function App() {
   const [isEntered, setIsEntered] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -143,12 +158,9 @@ export default function App() {
   const [dataSub, setDataSub] = useState([]); 
   const [dataPerdin, setDataPerdin] = useState([]); 
   
-  const currentMamin = dataMamin.filter(item => (item.tahun ? String(item.tahun) : '2026') === String(selectedYear));
-  const currentSub = dataSub.filter(item => (item.tahun ? String(item.tahun) : '2026') === String(selectedYear));
-  const currentPerdin = dataPerdin.filter(item => (item.tahun ? String(item.tahun) : '2026') === String(selectedYear));
-
-  // PERDIN YANG SUDAH DIREASILASIKAN (Untuk memotong Sisa Anggaran di Dashboard)
-  const validPerdin = currentPerdin.filter(p => String(p.status_realisasi) !== 'false');
+  const currentMamin = dataMamin.filter(item => selectedYear === 'Semua' ? true : (item.tahun ? String(item.tahun) : '2026') === String(selectedYear));
+  const currentSub = dataSub.filter(item => selectedYear === 'Semua' ? true : (item.tahun ? String(item.tahun) : '2026') === String(selectedYear));
+  const currentPerdin = dataPerdin.filter(item => selectedYear === 'Semua' ? true : (item.tahun ? String(item.tahun) : '2026') === String(selectedYear));
 
   const allCategoriesSet = new Set();
   currentSub.forEach(sub => {
@@ -165,8 +177,14 @@ export default function App() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [dialog, setDialog] = useState({ isOpen: false, type: '', targetSheet: '', title: '', message: '', targetId: null });
-  const [expandedRow, setExpandedRow] = useState(null);
-  const [expandedSub, setExpandedSub] = useState(null); // State untuk pengelompokan riwayat Mamin
+  
+  const [expandedMaminSub, setExpandedMaminSub] = useState(null);
+  const [expandedMaminRow, setExpandedMaminRow] = useState(null);
+  const toggleMaminSub = (sub) => setExpandedMaminSub(prev => prev === sub ? null : sub);
+  const toggleMaminRow = (id) => setExpandedMaminRow(prev => prev === id ? null : id);
+
+  const [expandedDashSubs, setExpandedDashSubs] = useState([]);
+  const toggleDashSub = (sub) => setExpandedDashSubs(prev => prev.includes(sub) ? prev.filter(n => n !== sub) : [...prev, sub]);
 
   const [currentPagePerdin, setCurrentPagePerdin] = useState(1);
   const itemsPerPage = 5;
@@ -180,13 +198,12 @@ export default function App() {
     jumlah_paket: '', is_auto: true, qty_nasi: '', harga_nasi: '', qty_snack: '', harga_snack: '' 
   });
   
-  // STATE PERDIN
-  const [perdinMode, setPerdinMode] = useState('input'); // 'input' | 'predict'
+  const [perdinMode, setPerdinMode] = useState('input');
+  const [draftCart, setDraftCart] = useState([]);
   const [formPerdin, setFormPerdin] = useState({
     id: '', sub_kegiatan: '', tujuan: '', lokasi: '', peserta: [{ nama: '', nominal: '' }]
   });
   const [predictForm, setPredictForm] = useState({ sub_kegiatan: '', lokasi: '', estimasi_biaya: '' });
-  const [cartPredict, setCartPredict] = useState([]); // Keranjang Draft Perdin
 
   const [formDynamic, setFormDynamic] = useState({
     id: '', sub_kegiatan: '', keterangan: '', tanggal: '', nominal: '', pagu: 0
@@ -201,16 +218,15 @@ export default function App() {
     return saved ? parseFloat(saved) : 0;
   });
 
-  // STATE UNTUK SEMBUNYIKAN GLOBAL CARDS
   const [showGlobalCards, setShowGlobalCards] = useState(() => {
     const saved = localStorage.getItem('showGlobalCards');
-    return saved !== null ? JSON.parse(saved) : true;
+    return saved ? JSON.parse(saved) : true;
   });
-  
+
   const toggleGlobalCards = () => {
-    const newValue = !showGlobalCards;
-    setShowGlobalCards(newValue);
-    localStorage.setItem('showGlobalCards', JSON.stringify(newValue));
+    const newVal = !showGlobalCards;
+    setShowGlobalCards(newVal);
+    localStorage.setItem('showGlobalCards', JSON.stringify(newVal));
   };
 
   useEffect(() => {
@@ -225,7 +241,6 @@ export default function App() {
     setIsEditingDiscount(false);
   };
 
-  // ================= KALKULASI MAMIN =================
   const isAutoMode = formMamin.is_auto !== false;
   let realisasiAnggaranRapat = 0;
   let totalHargaNego = 0;
@@ -246,7 +261,7 @@ export default function App() {
 
   const paguMamin = parseRibuan(formMamin.pagu_mamin);
   const historyExcludingCurrent = currentMamin
-    .filter(item => item.id !== formMamin.id && item.sub_kegiatan === formMamin.sub_kegiatan && (item.kategori_belanja || 'Makan Minum Rapat') === formMamin.kategori_belanja)
+    .filter(item => item.id !== formMamin.id && item.sub_kegiatan === formMamin.sub_kegiatan && item.kategori_belanja === formMamin.kategori_belanja)
     .reduce((sum, item) => sum + (parseFloat(item.realisasi_anggaran) || 0), 0);
   const realisasiTotal = historyExcludingCurrent + realisasiAnggaranRapat;
   const sisaMamin = paguMamin - realisasiTotal;
@@ -257,7 +272,6 @@ export default function App() {
     }
   }, [formMamin.pagu_mamin, realisasiAnggaranRapat, isEditing]);
 
-  // ================= KALKULASI PERDIN =================
   const currentTotalPerdin = formPerdin.peserta.reduce((sum, p) => sum + parseRibuan(p.nominal), 0);
   let currentPaguPerdinSummary = 0;
   if (filterPerdin === 'Semua') {
@@ -267,9 +281,9 @@ export default function App() {
     if (s) currentPaguPerdinSummary = getPaguKategori(s, 'perdin');
   }
 
-  // Menggunakan validPerdin untuk Sisa Anggaran (Hanya yang terealisasi)
-  const historyPerdinSum = validPerdin
+  const historyPerdinSum = currentPerdin
     .filter(item => filterPerdin === 'Semua' ? true : item.sub_kegiatan === filterPerdin)
+    .filter(isRealized)
     .reduce((sum, item) => sum + getPerdinTotal(item), 0); 
   const sisaPerdinSummary = currentPaguPerdinSummary - historyPerdinSum;
 
@@ -277,7 +291,6 @@ export default function App() {
   const totalPagesPerdin = Math.ceil(filteredPerdinData.length / itemsPerPage);
   const paginatedPerdinData = filteredPerdinData.slice((currentPagePerdin - 1) * itemsPerPage, currentPagePerdin * itemsPerPage);
 
-  // DATA PREDIKTOR PERDIN (Rencana Perjalanan)
   const globalPerdinCosts = {};
   currentPerdin.forEach(p => {
       if (!p.lokasi) return;
@@ -293,19 +306,17 @@ export default function App() {
       const sData = currentSub.find(s => s.nama_sub === predictForm.sub_kegiatan);
       if (sData) {
           const pagu = getPaguKategori(sData, 'perdin');
-          const history = validPerdin.filter(p => p.sub_kegiatan === predictForm.sub_kegiatan).reduce((sum, item) => sum + getPerdinTotal(item), 0);
+          const history = currentPerdin.filter(p => p.sub_kegiatan === predictForm.sub_kegiatan).filter(isRealized).reduce((sum, item) => sum + getPerdinTotal(item), 0);
           const sisaAwal = pagu - history;
           sisaAnggaranPredict = savedPerdinDiscount > 0 ? sisaAwal - (sisaAwal * (savedPerdinDiscount / 100)) : sisaAwal;
       }
   }
-  
-  // Total dari Keranjang Draft
-  const totalDraftCost = cartPredict.reduce((sum, item) => sum + item.cost, 0);
+  const totalDraftCost = draftCart.reduce((sum, item) => sum + item.biaya, 0);
   const sisaSetelahPredict = sisaAnggaranPredict - totalDraftCost;
   const isPredictSafe = sisaSetelahPredict >= 0;
 
   useEffect(() => { fetchData(); }, []);
-  useEffect(() => { setFormSub(prev => ({ ...prev, tahun: selectedYear })); }, [selectedYear]);
+  useEffect(() => { setFormSub(prev => ({ ...prev, tahun: selectedYear === 'Semua' ? '2026' : selectedYear })); }, [selectedYear]);
 
   const fetchData = async (showLoader = true) => {
     if (!SCRIPT_URL.startsWith('http')) return;
@@ -354,49 +365,6 @@ export default function App() {
     setFormPerdin({ ...formPerdin, [name]: formattedValue });
   };
 
-  const handlePredictChange = (e) => {
-    const { name, value } = e.target;
-    if (name === 'sub_kegiatan') {
-      setPredictForm({ ...predictForm, [name]: value, lokasi: '', estimasi_biaya: '' });
-      setCartPredict([]);
-    } else if (name === 'lokasi') {
-        const locData = suggestionList.find(s => s.lokasi.toLowerCase() === value.toLowerCase());
-        if (locData) {
-            setPredictForm({ ...predictForm, lokasi: value, estimasi_biaya: formatRibuan(locData.avgCost) });
-        } else {
-            setPredictForm({ ...predictForm, lokasi: value });
-        }
-    } else if (name === 'estimasi_biaya') {
-        setPredictForm({ ...predictForm, estimasi_biaya: formatRibuan(value) });
-    }
-  };
-
-  const addDraftToCart = () => {
-     if(!predictForm.lokasi || !predictForm.estimasi_biaya) return;
-     const cost = parseRibuan(predictForm.estimasi_biaya);
-     if(cost > 0) {
-        setCartPredict([...cartPredict, { lokasi: predictForm.lokasi, cost: cost, id: Date.now() }]);
-        setPredictForm({...predictForm, lokasi: '', estimasi_biaya: ''});
-     }
-  };
-  const removeDraftFromCart = (idToRemove) => {
-     setCartPredict(cartPredict.filter(item => item.id !== idToRemove));
-  };
-
-  const handleInputDynamic = (e) => {
-    const { name, value } = e.target;
-    if (name === 'sub_kegiatan') {
-       const catName = activeTab.replace('dynamic_', '');
-       const selectedSub = currentSub.find(sub => sub.nama_sub === value);
-       const paguKat = selectedSub ? getPaguKategoriByName(selectedSub, catName) : 0;
-       setFormDynamic(prev => ({ ...prev, [name]: value, pagu: paguKat }));
-    } else if (name === 'nominal') {
-       setFormDynamic({ ...formDynamic, [name]: formatRibuan(value) });
-    } else {
-       setFormDynamic({ ...formDynamic, [name]: value });
-    }
-  };
-
   const handlePesertaChange = (index, field, value) => {
     const updatedPeserta = [...formPerdin.peserta];
     let formattedValue = value;
@@ -418,21 +386,48 @@ export default function App() {
     setFormPerdin({ ...formPerdin, peserta: updatedPeserta });
   };
 
-  // FUNGSI TOGGLE REALISASI PERDIN
+  const addToCart = () => {
+    if (!predictForm.lokasi || !predictForm.estimasi_biaya) return;
+    setDraftCart([...draftCart, { 
+       lokasi: predictForm.lokasi, 
+       biaya: parseRibuan(predictForm.estimasi_biaya),
+       id: Date.now()
+    }]);
+    setPredictForm({...predictForm, lokasi: '', estimasi_biaya: ''});
+  };
+
+  const removeFromCart = (id) => {
+    setDraftCart(draftCart.filter(item => item.id !== id));
+  };
+
+  const handleInputDynamic = (e) => {
+    const { name, value } = e.target;
+    if (name === 'sub_kegiatan') {
+       const catName = activeTab.replace('dynamic_', '');
+       const selectedSub = currentSub.find(sub => sub.nama_sub === value);
+       const paguKat = selectedSub ? getPaguKategoriByName(selectedSub, catName) : 0;
+       setFormDynamic(prev => ({ ...prev, [name]: value, pagu: paguKat }));
+    } else if (name === 'nominal') {
+       setFormDynamic({ ...formDynamic, [name]: formatRibuan(value) });
+    } else {
+       setFormDynamic({ ...formDynamic, [name]: value });
+    }
+  };
+
   const toggleRealisasiPerdin = async (item) => {
-    const newStatus = String(item.status_realisasi) === 'false' ? 'true' : 'false';
+    const newStatus = isRealized(item) ? '0' : '1';
+    const updatedItem = { ...item, status_realisasi: newStatus };
     
-    // Optimistic update
-    setDataPerdin(prev => prev.map(p => p.id === item.id ? { ...p, status_realisasi: newStatus } : p));
+    setDataPerdin(prev => prev.map(p => p.id === item.id ? updatedItem : p));
     
-    if (!SCRIPT_URL.startsWith('http')) return;
     try {
-      const payload = { sheet: 'Perdin', action: 'update', data: { ...item, status_realisasi: newStatus } };
-      await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
-      fetchData(false);
-    } catch (error) {
-      console.error('Error toggle status:', error);
-      fetchData(false);
+      await fetch(SCRIPT_URL, { 
+        method: 'POST', 
+        body: JSON.stringify({ sheet: 'Perdin', action: 'update', data: updatedItem }) 
+      });
+    } catch (error) { 
+      console.error('Error toggling status:', error); 
+      setDataPerdin(prev => prev.map(p => p.id === item.id ? item : p));
     }
   };
 
@@ -441,7 +436,7 @@ export default function App() {
     let msg = '';
     if (targetSheet === 'Sheet1') msg = `Simpan data Rapat "${formMamin.nama_rapat}" dengan realisasi ${formatRp(realisasiAnggaranRapat)}?`;
     else if (targetSheet === 'SubKegiatan') msg = `Simpan Master Sub Kegiatan "${formSub.nama_sub}" untuk Tahun ${formSub.tahun || selectedYear}?`;
-    else if (targetSheet === 'Perdin') msg = `Simpan data Perjalanan Dinas ke "${formPerdin.lokasi}" dengan total ${formatRp(currentTotalPerdin)}? (Akan disimpan sebagai Draft Belum Cair secara default)`;
+    else if (targetSheet === 'Perdin') msg = `Simpan data Perjalanan Dinas ke "${formPerdin.lokasi}" dengan total ${formatRp(currentTotalPerdin)}?`;
     else if (targetSheet === 'Dynamic') msg = `Simpan data "${formDynamic.keterangan}" dengan realisasi ${formatRp(parseRibuan(formDynamic.nominal))}?`;
 
     setDialog({ isOpen: true, type: 'save', targetSheet, title: isEditing ? 'Konfirmasi Pembaruan' : 'Konfirmasi Simpan', message: msg, targetId: null });
@@ -459,11 +454,12 @@ export default function App() {
     
     let payloadData = null;
     let sheetNameAPI = targetSheet;
+    const activeYearSave = selectedYear === 'Semua' ? '2026' : selectedYear;
 
     if (type === 'save') {
       if (targetSheet === 'Sheet1') {
         const catName = formMamin.kategori_belanja || 'Makan Minum Rapat';
-        payloadData = { ...formMamin, pagu_mamin: parseRibuan(formMamin.pagu_mamin), pagu_bulanan: parseRibuan(formMamin.pagu_bulanan), jumlah_paket: jumlahPaketTersimpan, realisasi_anggaran: realisasiAnggaranRapat, tahun: selectedYear, kategori_belanja: catName };
+        payloadData = { ...formMamin, pagu_mamin: parseRibuan(formMamin.pagu_mamin), pagu_bulanan: parseRibuan(formMamin.pagu_bulanan), jumlah_paket: jumlahPaketTersimpan, realisasi_anggaran: realisasiAnggaranRapat, tahun: activeYearSave, kategori_belanja: catName };
       } else if (targetSheet === 'SubKegiatan') {
         const kategoriStr = JSON.stringify(formSub.kategori);
         let pMamin = 0, pPerdin = 0;
@@ -472,12 +468,12 @@ export default function App() {
            if (low.includes('makan minum') || low.includes('mamin')) pMamin = parseRibuan(k.nominal);
            if (low.includes('perjalanan dinas') || low.includes('perdin')) pPerdin = parseRibuan(k.nominal);
         });
-        payloadData = { id: formSub.id, nama_sub: formSub.nama_sub, kategori_belanja: kategoriStr, pagu_anggaran: pMamin, pagu_perdin: pPerdin, tahun: formSub.tahun || selectedYear };
+        payloadData = { id: formSub.id, nama_sub: formSub.nama_sub, kategori_belanja: kategoriStr, pagu_anggaran: pMamin, pagu_perdin: pPerdin, tahun: formSub.tahun || activeYearSave };
       } else if (targetSheet === 'Perdin') {
-        payloadData = { id: formPerdin.id, sub_kegiatan: formPerdin.sub_kegiatan, tujuan: formPerdin.tujuan, lokasi: formPerdin.lokasi, rincian_peserta: JSON.stringify(formPerdin.peserta), total_nominal: currentTotalPerdin, tahun: selectedYear, status_realisasi: 'false' };
+        payloadData = { id: formPerdin.id, sub_kegiatan: formPerdin.sub_kegiatan, tujuan: formPerdin.tujuan, lokasi: formPerdin.lokasi, rincian_peserta: JSON.stringify(formPerdin.peserta), total_nominal: currentTotalPerdin, tahun: activeYearSave, status_realisasi: '1' };
       } else if (targetSheet === 'Dynamic') {
         const catName = activeTab.replace('dynamic_', '');
-        payloadData = { id: formDynamic.id, sub_kegiatan: formDynamic.sub_kegiatan, kategori_belanja: catName, nama_rapat: formDynamic.keterangan, tanggal_rapat: formDynamic.tanggal, realisasi_anggaran: parseRibuan(formDynamic.nominal), tahun: selectedYear };
+        payloadData = { id: formDynamic.id, sub_kegiatan: formDynamic.sub_kegiatan, kategori_belanja: catName, nama_rapat: formDynamic.keterangan, tanggal_rapat: formDynamic.tanggal, realisasi_anggaran: parseRibuan(formDynamic.nominal), tahun: activeYearSave };
         sheetNameAPI = 'Sheet1'; 
       }
 
@@ -488,7 +484,7 @@ export default function App() {
         setFormMamin({ id: '', sub_kegiatan: '', kategori_belanja: 'Makan Minum Rapat', pagu_mamin: '', pagu_bulanan: '', nama_rapat: '', tanggal_rapat: '', jumlah_paket: '', is_auto: true, qty_nasi: '', harga_nasi: '', qty_snack: '', harga_snack: '' });
       } else if (targetSheet === 'SubKegiatan') {
         setDataSub(prev => currentIsEditing ? prev.map(item => item.id === payloadData.id ? optimisticData : item) : [...prev, optimisticData]);
-        setFormSub({ id: '', nama_sub: '', tahun: selectedYear, kategori: [{ nama: 'Makan Minum Rapat', nominal: '' }, { nama: 'Perjalanan Dinas', nominal: '' }] });
+        setFormSub({ id: '', nama_sub: '', tahun: selectedYear === 'Semua' ? '2026' : selectedYear, kategori: [{ nama: 'Makan Minum Rapat', nominal: '' }, { nama: 'Perjalanan Dinas', nominal: '' }] });
       } else if (targetSheet === 'Perdin') {
         setDataPerdin(prev => currentIsEditing ? prev.map(item => item.id === payloadData.id ? optimisticData : item) : [...prev, optimisticData]);
         setFormPerdin({ id: '', sub_kegiatan: '', tujuan: '', lokasi: '', peserta: [{ nama: '', nominal: '' }] });
@@ -568,28 +564,40 @@ export default function App() {
 
   const cancelEdit = () => {
     setFormMamin({ id: '', sub_kegiatan: '', kategori_belanja: 'Makan Minum Rapat', pagu_mamin: '', pagu_bulanan: '', nama_rapat: '', tanggal_rapat: '', jumlah_paket: '', is_auto: true, qty_nasi: '', harga_nasi: '', qty_snack: '', harga_snack: '' });
-    setFormSub({ id: '', nama_sub: '', tahun: selectedYear, kategori: [{ nama: 'Makan Minum Rapat', nominal: '' }, { nama: 'Perjalanan Dinas', nominal: '' }] });
+    setFormSub({ id: '', nama_sub: '', tahun: selectedYear === 'Semua' ? '2026' : selectedYear, kategori: [{ nama: 'Makan Minum Rapat', nominal: '' }, { nama: 'Perjalanan Dinas', nominal: '' }] });
     setFormPerdin({ id: '', sub_kegiatan: '', tujuan: '', lokasi: '', peserta: [{ nama: '', nominal: '' }] });
     setFormDynamic({ id: '', sub_kegiatan: '', keterangan: '', tanggal: '', nominal: '', pagu: 0 });
     setIsEditing(false);
   };
-
-  const toggleRow = (id) => setExpandedRow(prev => prev === id ? null : id);
 
   const totalPaguMaminKeseluruhan = currentSub.reduce((sum, s) => sum + getPaguKategori(s, 'mamin'), 0);
   const maminEntries = currentMamin.filter(item => {
     const low = (item.kategori_belanja || 'Makan Minum Rapat').toLowerCase();
     return low.includes('makan minum') || low.includes('mamin');
   });
+  const maminGrouped = {};
+  maminEntries.forEach(m => {
+    if (!maminGrouped[m.sub_kegiatan]) maminGrouped[m.sub_kegiatan] = [];
+    maminGrouped[m.sub_kegiatan].push(m);
+  });
   const totalRealisasiMaminKeseluruhan = maminEntries.reduce((sum, m) => sum + parseFloat(m.realisasi_anggaran), 0);
   const sisaMaminKeseluruhan = totalPaguMaminKeseluruhan - totalRealisasiMaminKeseluruhan;
 
   const totalPaguPerdinKeseluruhan = currentSub.reduce((sum, s) => sum + getPaguKategori(s, 'perdin'), 0);
-  // Realisasi perdin keseluruhan untuk Sisa Anggaran HANYA yang status valid (true)
-  const totalRealisasiPerdinKeseluruhan = validPerdin.reduce((sum, p) => sum + getPerdinTotal(p), 0);
+  const totalRealisasiPerdinKeseluruhan = currentPerdin.filter(isRealized).reduce((sum, p) => sum + getPerdinTotal(p), 0);
   const sisaPerdinKeseluruhan = totalPaguPerdinKeseluruhan - totalRealisasiPerdinKeseluruhan;
 
-  // --- EARLY WARNING SYSTEM (Peringatan Dini) ---
+  const totalPaguMasterKeseluruhan = currentSub.reduce((sum, s) => {
+    return sum + parseKategori(s).reduce((catSum, k) => catSum + parseRibuan(k.nominal), 0);
+  }, 0);
+
+  const totalRealisasiMasterKeseluruhan = totalRealisasiMaminKeseluruhan + totalRealisasiPerdinKeseluruhan + currentMamin.filter(item => {
+    const low = (item.kategori_belanja || 'Makan Minum Rapat').toLowerCase();
+    return !low.includes('makan minum') && !low.includes('mamin') && !low.includes('perjalanan dinas') && !low.includes('perdin');
+  }).reduce((sum, m) => sum + parseFloat(m.realisasi_anggaran), 0);
+
+  const totalSisaMasterKeseluruhan = totalPaguMasterKeseluruhan - totalRealisasiMasterKeseluruhan;
+
   const dashboardAlerts = [];
   if (activeTab === 'dashboard') {
     currentSub.forEach(sub => {
@@ -599,7 +607,7 @@ export default function App() {
         
         const isPerdin = (kategori.nama || '').toLowerCase().includes('perjalanan dinas') || (kategori.nama || '').toLowerCase().includes('perdin');
         const realisasi = isPerdin 
-          ? validPerdin.filter(item => item.sub_kegiatan === sub.nama_sub).reduce((sum, item) => sum + getPerdinTotal(item), 0)
+          ? currentPerdin.filter(item => item.sub_kegiatan === sub.nama_sub).filter(isRealized).reduce((sum, item) => sum + getPerdinTotal(item), 0)
           : currentMamin.filter(item => item.sub_kegiatan === sub.nama_sub && (item.kategori_belanja || 'Makan Minum Rapat') === kategori.nama).reduce((sum, item) => sum + (parseFloat(item.realisasi_anggaran) || 0), 0);
         
         const sisa = pagu - realisasi;
@@ -675,7 +683,6 @@ export default function App() {
 
       <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans overflow-x-hidden text-slate-800">
         
-        {/* Mobile Header */}
         <div className="md:hidden bg-white/80 backdrop-blur-md p-4 shadow-sm flex items-center justify-between z-50 sticky top-0 anim-top border-b border-slate-100">
           <div className="flex items-center gap-2 text-indigo-800 font-extrabold text-lg tracking-tight">
             <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center text-white shadow-md">
@@ -688,15 +695,14 @@ export default function App() {
           </button>
         </div>
 
-        {/* Sidebar Navigation */}
         <div className={`fixed md:sticky top-0 left-0 h-screen w-72 bg-white/90 backdrop-blur-xl md:bg-white shadow-[4px_0_24px_rgba(0,0,0,0.02)] border-r border-slate-100 z-40 transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] flex flex-col anim-sidebar`}>
           <div className="p-6 border-b border-slate-100/50 flex items-center gap-3 mt-14 md:mt-0">
             <div className="w-11 h-11 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-[0_4px_14px_0_rgb(59,130,246,0.39)]">
               <Briefcase size={22} strokeWidth={2.5} />
             </div>
             <div>
-              <h1 className="font-extrabold text-slate-800 tracking-tight text-lg">Monitoring Anggaran</h1>
-              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Bidang Aptika</p>
+              <h1 className="font-extrabold text-slate-800 tracking-tight text-lg leading-tight">Monitoring<br/>Anggaran</h1>
+              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mt-0.5">Bidang Aptika</p>
             </div>
           </div>
           
@@ -707,6 +713,7 @@ export default function App() {
               </label>
               <div className="relative group">
                 <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className="w-full p-3 text-sm bg-slate-50 text-indigo-700 font-bold border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none appearance-none cursor-pointer transition-all hover:bg-slate-100">
+                  <option value="Semua">Semua Tahun</option>
                   {['2024', '2025', '2026', '2027', '2028', '2029', '2030'].map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-indigo-500 group-hover:text-indigo-600 transition-colors"><ChevronDown size={16}/></div>
@@ -734,7 +741,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Main Content Area */}
         <div className="flex-1 p-4 md:p-8 lg:p-10 overflow-y-auto w-full max-w-[1600px] mx-auto">
           
           <div className="mb-8 md:mb-10 anim-fade-up">
@@ -752,7 +758,30 @@ export default function App() {
           {activeTab === 'dashboard' && (
             <div className="space-y-10 anim-fade-up">
               
-              {/* --- EARLY WARNING SYSTEM VISUAL --- */}
+              <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-60"></div>
+                <div className="absolute bottom-0 left-0 w-40 h-40 bg-blue-50 rounded-full blur-2xl opacity-60"></div>
+                
+                <div className="relative z-10 flex items-center gap-4">
+                   <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center text-white shadow-lg"><Wallet size={28} /></div>
+                   <div>
+                      <h3 className="text-sm font-extrabold text-slate-400 uppercase tracking-widest">Total Pagu Keseluruhan</h3>
+                      <p className="text-3xl font-black text-slate-800 mt-1"><AnimatedNominal value={totalPaguMasterKeseluruhan} /></p>
+                   </div>
+                </div>
+
+                <div className="relative z-10 flex flex-row gap-6 w-full md:w-auto">
+                   <div className="bg-emerald-50/80 border border-emerald-100 px-5 py-4 rounded-2xl flex-1 md:flex-none">
+                      <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest flex items-center gap-1.5 mb-1"><TrendingUp size={12}/> Terealisasi</div>
+                      <div className="text-lg md:text-xl font-black text-emerald-700"><AnimatedNominal value={totalRealisasiMasterKeseluruhan} /></div>
+                   </div>
+                   <div className="bg-blue-50/80 border border-blue-100 px-5 py-4 rounded-2xl flex-1 md:flex-none">
+                      <div className="text-[10px] font-bold text-blue-600 uppercase tracking-widest flex items-center gap-1.5 mb-1"><Briefcase size={12}/> Sisa Anggaran</div>
+                      <div className="text-lg md:text-xl font-black text-blue-700"><AnimatedNominal value={totalSisaMasterKeseluruhan} /></div>
+                   </div>
+                </div>
+              </div>
+
               {dashboardAlerts.length > 0 && (
                 <div className="bg-red-50/80 border border-red-100 rounded-3xl p-6 shadow-sm relative overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
                   <div className="absolute -right-10 -top-10 w-40 h-40 bg-red-200/50 rounded-full blur-3xl"></div>
@@ -773,17 +802,15 @@ export default function App() {
                 </div>
               )}
 
-              {/* Global Cards with Hide/Show Toggle */}
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-slate-800 text-lg">Ringkasan Global</h3>
-                <button onClick={toggleGlobalCards} className="flex items-center gap-2 text-sm font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors">
-                  {showGlobalCards ? <><EyeOff size={16} /> Sembunyikan</> : <><Eye size={16} /> Tampilkan</>}
+              <div className="flex justify-end mb-4">
+                <button onClick={toggleGlobalCards} className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-widest hover:text-indigo-600 transition-colors bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm hover:bg-indigo-50 hover:border-indigo-200">
+                  {showGlobalCards ? <><EyeOff size={16} strokeWidth={2.5}/> Sembunyikan Kartu Global</> : <><Eye size={16} strokeWidth={2.5}/> Tampilkan Kartu Global</>}
                 </button>
               </div>
 
               {showGlobalCards && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 animate-in fade-in zoom-in duration-300">
-                  {/* Mamin Global Card */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 animate-in slide-in-from-top-4 fade-in duration-500">
+                  
                   <div className="bg-white rounded-3xl p-7 md:p-8 border border-slate-100/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden group hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow duration-500 flex flex-col">
                     <div className="absolute -right-10 -top-10 w-40 h-40 bg-blue-50 rounded-full blur-3xl group-hover:bg-blue-100 transition-colors duration-500"></div>
                     <h3 className="font-extrabold text-xl text-slate-800 mb-6 flex items-center gap-3 relative z-10">
@@ -802,7 +829,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Perdin Global Card */}
                   <div className="bg-white rounded-3xl p-7 md:p-8 border border-slate-100/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden group hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow duration-500 flex flex-col">
                     <div className="absolute -right-10 -top-10 w-40 h-40 bg-indigo-50 rounded-full blur-3xl group-hover:bg-indigo-100 transition-colors duration-500"></div>
                     <div className="flex justify-between items-center mb-6 relative z-10">
@@ -823,13 +849,13 @@ export default function App() {
                       <div className="pt-4 mt-auto min-w-0">
                         {isEditingDiscount ? (
                           <div className="flex items-center justify-between gap-2 bg-indigo-50 p-2.5 rounded-xl border border-indigo-100 animate-in fade-in zoom-in duration-200">
-                            <span className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider ml-1">Potongan:</span>
-                            <div className="flex items-center gap-1">
-                              <input type="number" value={perdinDiscountPct} onChange={e => setPerdinDiscountPct(e.target.value)} className="w-16 p-1.5 text-sm font-bold text-center border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white" placeholder="%" />
-                              <span className="text-sm font-bold text-indigo-800 mr-2">%</span>
-                              <button onClick={handleSaveDiscount} className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm transition-colors"><Check size={16} strokeWidth={3} /></button>
-                              <button onClick={() => setIsEditingDiscount(false)} className="p-1.5 bg-white text-slate-600 rounded-lg hover:bg-slate-100 shadow-sm transition-colors border border-slate-200"><X size={16} strokeWidth={3} /></button>
-                            </div>
+                             <span className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider ml-1">Potongan:</span>
+                             <div className="flex items-center gap-1">
+                               <input type="number" value={perdinDiscountPct} onChange={e => setPerdinDiscountPct(e.target.value)} className="w-16 p-1.5 text-sm font-bold text-center border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white" placeholder="%" />
+                               <span className="text-sm font-bold text-indigo-800 mr-2">%</span>
+                               <button onClick={handleSaveDiscount} className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm transition-colors"><Check size={16} strokeWidth={3} /></button>
+                               <button onClick={() => setIsEditingDiscount(false)} className="p-1.5 bg-white text-slate-600 rounded-lg hover:bg-slate-100 shadow-sm transition-colors border border-slate-200"><X size={16} strokeWidth={3} /></button>
+                             </div>
                           </div>
                         ) : savedPerdinDiscount > 0 ? (
                           <div className="flex flex-col gap-2 animate-in fade-in duration-300">
@@ -839,8 +865,8 @@ export default function App() {
                             </div>
                             <div className="flex justify-between items-center bg-indigo-50/80 p-3 rounded-2xl border border-indigo-100 shadow-sm">
                               <div className="flex flex-col">
-                                <span className="font-extrabold text-indigo-800 text-[11px] uppercase tracking-wider">Sisa Anggaran</span>
-                                <span className="text-[9px] font-bold text-indigo-500 mt-0.5 flex items-center gap-1 bg-white w-fit px-1.5 py-0.5 rounded-md border border-indigo-100"><Scissors size={10}/> Dipotong {savedPerdinDiscount}%</span>
+                                 <span className="font-extrabold text-indigo-800 text-[11px] uppercase tracking-wider">Sisa Anggaran</span>
+                                 <span className="text-[9px] font-bold text-indigo-500 mt-0.5 flex items-center gap-1 bg-white w-fit px-1.5 py-0.5 rounded-md border border-indigo-100"><Scissors size={10}/> Dipotong {savedPerdinDiscount}%</span>
                               </div>
                               <span className={`font-black text-2xl truncate ${sisaPerdinKeseluruhan < 0 ? 'text-red-500' : 'text-indigo-700'}`}>
                                 <AnimatedNominal value={sisaPerdinKeseluruhan - (sisaPerdinKeseluruhan * (savedPerdinDiscount / 100))} />
@@ -862,7 +888,7 @@ export default function App() {
                 </div>
               )}
 
-              <div className="flex items-center gap-4 mb-6 mt-8">
+              <div className="flex items-center gap-4 mb-6">
                 <div className="h-px bg-slate-200 flex-1"></div>
                 <span className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Rincian Komprehensif Sub Kegiatan</span>
                 <div className="h-px bg-slate-200 flex-1"></div>
@@ -870,59 +896,88 @@ export default function App() {
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8">
                 {currentSub.length === 0 ? (
-                  <div className="col-span-full bg-white rounded-3xl p-10 text-center text-slate-400 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] font-medium">Belum ada Master Data Sub Kegiatan yang tercatat di {selectedYear}.</div>
+                  <div className="col-span-full bg-white rounded-3xl p-10 text-center text-slate-400 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] font-medium">Belum ada Master Data Sub Kegiatan yang tercatat.</div>
                 ) : (
                   currentSub.map((sub, idx) => {
                     const kategoriList = parseKategori(sub);
+                    const isExpanded = expandedDashSubs.includes(sub.nama_sub);
+                    
                     return (
-                      <div key={idx} className="bg-white rounded-3xl p-7 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.06)] transition-all duration-500 flex flex-col">
-                        <h3 className="font-extrabold text-lg text-slate-800 mb-5 border-b border-slate-100 pb-4 truncate leading-snug" title={sub.nama_sub}>
-                          <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded-md text-[10px] mr-3 font-bold uppercase tracking-widest align-middle">Sub</span>
-                          {sub.nama_sub}
-                        </h3>
+                      <div key={idx} className="bg-white rounded-3xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.06)] transition-all duration-500 flex flex-col overflow-hidden group/board">
                         
-                        <div className="space-y-4 flex-1">
-                          {kategoriList.map((kategori, kIdx) => {
-                            const pagu = parseRibuan(kategori.nominal);
-                            const isPerdin = kategori.nama.toLowerCase().includes('perjalanan dinas') || kategori.nama.toLowerCase().includes('perdin');
+                        <div onClick={() => toggleDashSub(sub.nama_sub)} className={`p-6 md:p-7 cursor-pointer transition-colors duration-500 flex items-start justify-between gap-4 ${isExpanded ? 'bg-slate-50 border-b border-slate-100' : 'bg-white hover:bg-slate-50/50'}`}>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-extrabold text-lg text-slate-800 truncate leading-snug" title={sub.nama_sub}>
+                              <span className="bg-white border border-slate-200 text-slate-500 px-2 py-1 rounded-md text-[10px] mr-3 font-bold uppercase tracking-widest align-middle shadow-sm">Sub</span>
+                              {sub.nama_sub}
+                            </h3>
                             
-                            const realisasi = isPerdin 
-                              ? validPerdin
-                                  .filter(item => item.sub_kegiatan === sub.nama_sub)
-                                  .reduce((sum, item) => sum + getPerdinTotal(item), 0)
-                              : currentMamin
-                                  .filter(item => item.sub_kegiatan === sub.nama_sub && (item.kategori_belanja || 'Makan Minum Rapat') === kategori.nama)
-                                  .reduce((sum, item) => sum + (parseFloat(item.realisasi_anggaran) || 0), 0);
-                            
-                            const sisa = pagu - realisasi;
-                            const IconKat = getCategoryIcon(kategori.nama);
-                            
-                            return (
-                              <div key={kIdx} className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100/50">
-                                <div className="flex items-center gap-3 mb-3">
-                                  <div className="p-2 bg-white rounded-xl shadow-sm border border-slate-100 text-slate-500"><IconKat size={16} strokeWidth={2.5}/></div>
-                                  <div className="text-sm font-bold text-slate-700 uppercase tracking-wide truncate" title={kategori.nama}>{kategori.nama}</div>
-                                </div>
-                                <div className="grid grid-cols-3 gap-2 text-xs md:text-sm mb-1">
-                                  <div>
-                                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Pagu</div>
-                                    <div className="font-bold text-slate-700"><AnimatedNominal value={pagu} /></div>
+                            <div className={`flex flex-wrap gap-2 transition-all duration-500 ease-in-out origin-top-left ${isExpanded ? 'opacity-0 max-h-0 scale-y-0 mt-0 overflow-hidden' : 'opacity-100 max-h-20 scale-y-100 mt-3'}`}>
+                              {kategoriList.map((k, i) => {
+                                const IconKat = getCategoryIcon(k.nama);
+                                return (
+                                  <div key={i} className="flex items-center gap-1.5 bg-slate-100/80 text-slate-500 px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm" title={k.nama}>
+                                    <IconKat size={12} strokeWidth={3} className="text-slate-400"/>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider max-w-[100px] truncate">{k.nama}</span>
                                   </div>
-                                  <div>
-                                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Realisasi</div>
-                                    <div className="font-bold text-red-500"><AnimatedNominal value={realisasi} /></div>
-                                  </div>
-                                  <div className="text-right">
-                                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Sisa</div>
-                                    <div className={`font-black truncate ${sisa < 0 ? 'text-red-500' : 'text-emerald-500'}`} title={formatRp(sisa)}>
-                                      <AnimatedNominal value={sisa} />
+                                )
+                              })}
+                            </div>
+                          </div>
+                          
+                          <div className={`p-2 rounded-xl shrink-0 transition-all duration-500 ${isExpanded ? 'bg-indigo-100 text-indigo-600 shadow-inner' : 'bg-slate-100 text-slate-400 group-hover/board:bg-slate-200 group-hover/board:text-slate-500'}`}>
+                            <ChevronDown size={20} className={`transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] ${isExpanded ? 'rotate-180' : ''}`} />
+                          </div>
+                        </div>
+
+                        <div className={`transition-[max-height,opacity,background-color] duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden ${isExpanded ? 'max-h-[3000px] opacity-100 bg-slate-50/30' : 'max-h-0 opacity-0 bg-white'}`}>
+                          <div className="p-6 md:p-7 space-y-4">
+                            {kategoriList.map((kategori, kIdx) => {
+                              const pagu = parseRibuan(kategori.nominal);
+                              const isPerdin = kategori.nama.toLowerCase().includes('perjalanan dinas') || kategori.nama.toLowerCase().includes('perdin');
+                              
+                              const realisasi = isPerdin 
+                                ? currentPerdin
+                                    .filter(item => item.sub_kegiatan === sub.nama_sub)
+                                    .filter(isRealized)
+                                    .reduce((sum, item) => sum + getPerdinTotal(item), 0)
+                                : currentMamin
+                                    .filter(item => item.sub_kegiatan === sub.nama_sub && (item.kategori_belanja || 'Makan Minum Rapat') === kategori.nama)
+                                    .reduce((sum, item) => sum + (parseFloat(item.realisasi_anggaran) || 0), 0);
+                              
+                              const sisa = pagu - realisasi;
+                              const IconKat = getCategoryIcon(kategori.nama);
+                              
+                              return (
+                                <div key={kIdx} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-[0_8px_20px_rgba(0,0,0,0.04)] hover:border-indigo-200 transition-all duration-300 relative overflow-hidden group/item">
+                                  <div className="absolute top-0 left-0 w-1.5 h-full bg-slate-200 group-hover/item:bg-indigo-400 transition-colors duration-300"></div>
+                                  <div className="pl-2">
+                                    <div className="flex items-center gap-3 mb-4 border-b border-slate-50 pb-3">
+                                      <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-slate-500 group-hover/item:text-indigo-500 group-hover/item:bg-indigo-50 transition-colors duration-300"><IconKat size={18} strokeWidth={2.5}/></div>
+                                      <div className="text-sm font-extrabold text-slate-700 uppercase tracking-wide truncate" title={kategori.nama}>{kategori.nama}</div>
                                     </div>
+                                    <div className="grid grid-cols-3 gap-2 text-xs md:text-sm mb-1">
+                                      <div>
+                                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5">Pagu</div>
+                                        <div className="font-bold text-slate-700"><AnimatedNominal value={pagu} /></div>
+                                      </div>
+                                      <div>
+                                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5">Realisasi</div>
+                                        <div className="font-bold text-red-500"><AnimatedNominal value={realisasi} /></div>
+                                      </div>
+                                      <div className="text-right">
+                                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5">Sisa</div>
+                                        <div className={`font-black truncate ${sisa < 0 ? 'text-red-500' : 'text-emerald-500'}`} title={formatRp(sisa)}>
+                                          <AnimatedNominal value={sisa} />
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <ProgressBar realisasi={realisasi} pagu={pagu} />
                                   </div>
                                 </div>
-                                <ProgressBar realisasi={realisasi} pagu={pagu} />
-                              </div>
-                            )
-                          })}
+                              )
+                            })}
+                          </div>
                         </div>
                       </div>
                     )
@@ -932,7 +987,7 @@ export default function App() {
             </div>
           )}
 
-          {/* ================= TAB: MENU DINAMIS KATEGORI LAIN ================= */}
+          {/* ================= TAB: MENU DINAMIS ================= */}
           {activeTab.startsWith('dynamic_') && (() => {
             const catName = activeTab.replace('dynamic_', '');
             const filteredHistory = currentMamin.filter(m => m.kategori_belanja === catName);
@@ -951,8 +1006,6 @@ export default function App() {
 
             return (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                
-                {/* KIRI: FORM INPUT */}
                 <div className="lg:col-span-5 2xl:col-span-4 anim-fade-up">
                   <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden sticky top-6">
                     <div className="p-6 border-b border-slate-100/50 flex justify-between items-center bg-slate-50/50 backdrop-blur-md">
@@ -1008,7 +1061,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* KANAN: TABEL RIWAYAT */}
                 <div className="lg:col-span-7 2xl:col-span-8 flex flex-col h-full anim-fade-right">
                   <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden flex flex-col h-full">
                     <div className="p-6 md:p-8 border-b border-slate-100/50 flex justify-between items-center bg-slate-50/30">
@@ -1063,8 +1115,6 @@ export default function App() {
           {/* ================= TAB: MASTER SUB KEGIATAN ================= */}
           {activeTab === 'master_sub' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              
-              {/* FORM INPUT SUB KEGIATAN MULTI-KATEGORI */}
               <div className="lg:col-span-5 2xl:col-span-4 anim-fade-up">
                 <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden sticky top-6">
                   <div className="p-6 border-b border-slate-100/50 flex justify-between items-center bg-slate-50/50 backdrop-blur-md">
@@ -1088,7 +1138,6 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* DAFTAR DINAMIS KATEGORI BELANJA */}
                       <div className="pt-6 border-t border-slate-100 mt-6 relative">
                         <span className="absolute -top-3 left-0 bg-white px-2 text-[10px] font-extrabold text-indigo-500 uppercase tracking-widest">Rincian Kategori Belanja</span>
                         
@@ -1145,7 +1194,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* DAFTAR TABLE SUB KEGIATAN */}
               <div className="lg:col-span-7 2xl:col-span-8 anim-fade-right">
                 <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden h-full flex flex-col">
                   <div className="p-6 md:p-8 border-b border-slate-100/50 flex justify-between items-center bg-slate-50/30">
@@ -1167,38 +1215,46 @@ export default function App() {
                         {currentSub.length === 0 ? (
                           <tr><td colSpan="3" className="p-12 text-center text-slate-400 font-medium">Belum ada Sub Kegiatan terdaftar di tahun ini.</td></tr>
                         ) : (
-                          currentSub.map((item, idx) => (
-                            <tr key={idx} className="hover:bg-slate-50/80 transition-colors group align-top">
-                              <td className="p-5">
-                                <div className="font-extrabold text-slate-800 text-sm leading-snug group-hover:text-blue-600 transition-colors">{item.nama_sub}</div>
-                                <div className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 shadow-sm inline-block px-2 py-1 rounded-md mt-2 uppercase tracking-widest">
-                                  Tahun {item.tahun || selectedYear}
-                                </div>
-                              </td>
-                              <td className="p-5">
-                                <div className="flex flex-col gap-2">
-                                  {parseKategori(item).map((k, i) => {
-                                    const KatIcon = getCategoryIcon(k.nama);
-                                    return (
-                                      <div key={i} className="bg-white border border-slate-200/60 shadow-sm p-2.5 rounded-xl flex items-center justify-between gap-3 group/card hover:border-indigo-200 transition-colors">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <div className="p-1.5 bg-slate-50 rounded-lg text-slate-400 group-hover/card:text-indigo-500 group-hover/card:bg-indigo-50 transition-colors"><KatIcon size={14} strokeWidth={2.5}/></div>
-                                            <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider truncate" title={k.nama}>{k.nama}</span>
+                          currentSub.map((item, idx) => {
+                            const paguTotalCard = parseKategori(item).reduce((sum, k) => sum + parseRibuan(k.nominal), 0);
+                            
+                            return (
+                              <tr key={idx} className="hover:bg-slate-50/80 transition-colors group align-top">
+                                <td className="p-5">
+                                  <div className="font-extrabold text-slate-800 text-sm leading-snug group-hover:text-blue-600 transition-colors">{item.nama_sub}</div>
+                                  <div className="text-[10px] font-bold text-slate-500 bg-white border border-slate-200 shadow-sm inline-block px-2 py-1 rounded-md mt-2 uppercase tracking-widest">
+                                    Tahun {item.tahun || selectedYear}
+                                  </div>
+                                  <div className="mt-4 pt-3 border-t border-slate-200/50">
+                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Total Pagu:</div>
+                                    <div className="font-black text-blue-600"><AnimatedNominal value={paguTotalCard}/></div>
+                                  </div>
+                                </td>
+                                <td className="p-5">
+                                  <div className="flex flex-col gap-2">
+                                    {parseKategori(item).map((k, i) => {
+                                      const KatIcon = getCategoryIcon(k.nama);
+                                      return (
+                                        <div key={i} className="bg-white border border-slate-200/60 shadow-sm p-2.5 rounded-xl flex items-center justify-between gap-3 group/card hover:border-indigo-200 transition-colors">
+                                          <div className="flex items-center gap-2 min-w-0">
+                                              <div className="p-1.5 bg-slate-50 rounded-lg text-slate-400 group-hover/card:text-indigo-500 group-hover/card:bg-indigo-50 transition-colors"><KatIcon size={14} strokeWidth={2.5}/></div>
+                                              <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider truncate" title={k.nama}>{k.nama}</span>
+                                          </div>
+                                          <span className="text-xs font-black text-indigo-700 whitespace-nowrap"><AnimatedNominal value={parseRibuan(k.nominal)} /></span>
                                         </div>
-                                        <span className="text-xs font-black text-indigo-700 whitespace-nowrap"><AnimatedNominal value={parseRibuan(k.nominal)} /></span>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              </td>
-                              <td className="p-5">
-                                <div className="flex justify-center gap-2 opacity-80 group-hover:opacity-100 transition-opacity mt-1">
-                                  <button onClick={() => editData(item, 'SubKegiatan')} className="p-2 text-yellow-600 bg-yellow-50 rounded-xl hover:bg-yellow-100 transition-colors"><Edit size={16} strokeWidth={2.5}/></button>
-                                  <button onClick={() => triggerDelete(item.id, item.nama_sub, 'SubKegiatan')} className="p-2 text-red-500 bg-red-50 rounded-xl hover:bg-red-100 transition-colors"><Trash2 size={16} strokeWidth={2.5}/></button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))
+                                      )
+                                    })}
+                                  </div>
+                                </td>
+                                <td className="p-5">
+                                  <div className="flex justify-center gap-2 opacity-80 group-hover:opacity-100 transition-opacity mt-1">
+                                    <button onClick={() => editData(item, 'SubKegiatan')} className="p-2 text-yellow-600 bg-yellow-50 rounded-xl hover:bg-yellow-100 transition-colors"><Edit size={16} strokeWidth={2.5}/></button>
+                                    <button onClick={() => triggerDelete(item.id, item.nama_sub, 'SubKegiatan')} className="p-2 text-red-500 bg-red-50 rounded-xl hover:bg-red-100 transition-colors"><Trash2 size={16} strokeWidth={2.5}/></button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })
                         )}
                       </tbody>
                     </table>
@@ -1254,7 +1310,6 @@ export default function App() {
                         </button>
                       </div>
                       
-                      {/* Form QTY Mamin */}
                       {formMamin.is_auto ? (
                         <div className="sm:col-span-2 bg-amber-50/80 p-5 rounded-2xl border border-amber-200 shadow-sm relative overflow-hidden">
                           <div className="absolute top-0 right-0 w-32 h-32 bg-amber-100 rounded-full blur-3xl opacity-50"></div>
@@ -1289,7 +1344,6 @@ export default function App() {
                 </div>
               </div>
               
-              {/* KANAN: TABEL RIWAYAT MAMIN (PENGELOMPOKAN SUB KEGIATAN) */}
               <div className="lg:col-span-7 2xl:col-span-8 flex flex-col h-full anim-fade-right">
                 <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden flex flex-col h-full">
                   <div className="p-6 md:p-8 border-b border-slate-100/50 flex justify-between items-center bg-slate-50/30">
@@ -1302,93 +1356,72 @@ export default function App() {
                     <table className="w-full text-left border-collapse">
                       <thead className="bg-slate-50/80 text-slate-400 text-[10px] uppercase tracking-widest font-black">
                         <tr>
-                          <th className="p-5 font-bold border-b border-slate-100">Informasi Sub Kegiatan / Rapat</th>
+                          <th className="p-5 font-bold border-b border-slate-100">Informasi Rapat</th>
                           <th className="p-5 text-center font-bold w-20 md:w-28 border-b border-slate-100">Qty</th>
-                          <th className="p-5 text-right font-bold w-32 md:w-40 border-b border-slate-100">Realisasi (Rp)</th>
+                          <th className="p-5 text-right font-bold w-28 md:w-40 border-b border-slate-100">Realisasi (Rp)</th>
                           <th className="p-5 text-center font-bold w-20 md:w-24 border-b border-slate-100">Aksi</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {(() => {
-                          const maminHistoryList = currentMamin.filter(m => (m.kategori_belanja || 'Makan Minum Rapat').toLowerCase().includes('makan minum') || (m.kategori_belanja || 'Makan Minum Rapat').toLowerCase().includes('mamin'));
-                          
-                          if (maminHistoryList.length === 0) {
-                            return <tr><td colSpan="4" className="text-center p-12 text-slate-400 font-medium">Belum ada riwayat Rapat untuk tahun {selectedYear}.</td></tr>;
-                          }
-
-                          // LOGIKA PENGELOMPOKAN BERDASARKAN SUB KEGIATAN
-                          const groupedMamin = {};
-                          maminHistoryList.forEach(item => {
-                             const sub = item.sub_kegiatan || 'Tanpa Sub Kegiatan';
-                             if (!groupedMamin[sub]) {
-                                 groupedMamin[sub] = { sub_kegiatan: sub, total_realisasi: 0, items: [] };
-                             }
-                             groupedMamin[sub].total_realisasi += parseFloat(item.realisasi_anggaran) || 0;
-                             groupedMamin[sub].items.push(item);
-                          });
-                          const groupedMaminArray = Object.values(groupedMamin);
-
-                          return groupedMaminArray.map((group, gIdx) => {
-                            const isSubExpanded = expandedSub === group.sub_kegiatan;
-                            
-                            // Ambil Pagu & Sisa untuk Header Sub Kegiatan
-                            const subData = currentSub.find(s => s.nama_sub === group.sub_kegiatan);
-                            const paguSub = subData ? getPaguKategori(subData, 'mamin') : 0;
-                            const sisaSub = paguSub - group.total_realisasi;
+                        {Object.keys(maminGrouped).length === 0 ? (
+                          <tr><td colSpan="4" className="text-center p-12 text-slate-400 font-medium">Belum ada riwayat Rapat untuk tahun {selectedYear}.</td></tr>
+                        ) : (
+                          Object.keys(maminGrouped).map((subName, subIdx) => {
+                            const isSubExpanded = expandedMaminSub === subName;
+                            const subItems = maminGrouped[subName];
+                            const subTotal = subItems.reduce((acc, curr) => acc + (parseFloat(curr.realisasi_anggaran) || 0), 0);
+                            const subData = currentSub.find(s => s.nama_sub === subName);
+                            const subPagu = subData ? getPaguKategori(subData, 'mamin') : 0;
 
                             return (
-                              <React.Fragment key={`group-${gIdx}`}>
-                                
-                                {/* BARIS LEVEL 1: HEADER SUB KEGIATAN */}
-                                <tr onClick={() => setExpandedSub(prev => prev === group.sub_kegiatan ? null : group.sub_kegiatan)} className={`transition-all duration-300 cursor-pointer group border-b border-slate-200 ${isSubExpanded ? 'bg-indigo-50/80 shadow-sm' : 'bg-slate-100 hover:bg-slate-200/70'}`}>
-                                  <td className="p-4 align-middle" colSpan="2">
-                                    <div className="flex items-center gap-3">
-                                      <div className={`p-1.5 rounded-lg transition-all shadow-sm border ${isSubExpanded ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-slate-500 border-slate-200 group-hover:border-indigo-300 group-hover:text-indigo-600'}`}>
-                                          <ChevronDown size={16} strokeWidth={3} className={`transform transition-transform duration-300 ${isSubExpanded ? 'rotate-180' : ''}`} />
-                                      </div>
-                                      <div>
-                                        <div className="font-extrabold text-slate-800 text-sm md:text-base">{group.sub_kegiatan}</div>
-                                        <div className="text-[10px] font-bold text-slate-500 mt-1.5 flex gap-2">
-                                          <span className="bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-sm flex items-center gap-1"><Wallet size={10}/> Pagu: {formatRp(paguSub)}</span>
-                                          <span className={`border px-2 py-0.5 rounded-md shadow-sm flex items-center gap-1 ${sisaSub < 0 ? 'bg-red-50 text-red-600 border-red-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}><AlertCircle size={10}/> Sisa: {formatRp(sisaSub)}</span>
-                                        </div>
-                                      </div>
+                              <React.Fragment key={subIdx}>
+                                <tr onClick={() => toggleMaminSub(subName)} className={`cursor-pointer transition-colors ${isSubExpanded ? 'bg-indigo-50/80' : 'bg-slate-100/60 hover:bg-slate-200/50'}`}>
+                                  <td className="p-4" colSpan="4">
+                                    <div className="flex justify-between items-center">
+                                       <div className="flex items-center gap-3">
+                                          <div className={`p-1.5 rounded-lg transition-colors ${isSubExpanded ? 'bg-indigo-200 text-indigo-700' : 'bg-slate-200 text-slate-500'}`}>
+                                             <ChevronDown size={16} strokeWidth={3} className={`transition-transform duration-300 ${isSubExpanded ? 'rotate-180' : ''}`} />
+                                          </div>
+                                          <span className={`font-extrabold text-sm md:text-base ${isSubExpanded ? 'text-indigo-900' : 'text-slate-700'}`}>{subName}</span>
+                                       </div>
+                                       <div className="flex items-center gap-6">
+                                          <div className="text-right hidden sm:block">
+                                             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pagu</div>
+                                             <div className="font-bold text-slate-600"><AnimatedNominal value={subPagu} /></div>
+                                          </div>
+                                          <div className="text-right">
+                                             <div className={`text-[10px] font-bold uppercase tracking-widest ${isSubExpanded ? 'text-indigo-400' : 'text-slate-400'}`}>Total Realisasi</div>
+                                             <div className={`font-black ${isSubExpanded ? 'text-indigo-700' : 'text-blue-600'}`}><AnimatedNominal value={subTotal} /></div>
+                                          </div>
+                                       </div>
                                     </div>
                                   </td>
-                                  <td className="p-4 text-right font-black text-indigo-700 text-sm md:text-base align-middle">
-                                    <AnimatedNominal value={group.total_realisasi} />
-                                    <div className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{group.items.length} Rapat Tersimpan</div>
-                                  </td>
-                                  <td className="p-4 align-middle text-center text-slate-300 group-hover:text-indigo-400"><Layers size={20} strokeWidth={2}/></td>
                                 </tr>
 
-                                {/* BARIS LEVEL 2: DAFTAR RAPAT */}
-                                {isSubExpanded && group.items.map((item) => {
-                                  const isExpanded = expandedRow === item.id;
-                                  let detailManual = null, subTotal = 0, dppn = 0;
+                                {isSubExpanded && subItems.map((item) => {
+                                  const isRowExpanded = expandedMaminRow === item.id;
+                                  let detailManual = null, itemSubTotal = 0, dppn = 0;
                                   const totalRealisasi = parseFloat(item.realisasi_anggaran) || 0;
 
                                   if (String(item.jumlah_paket).includes('Nasi:')) {
                                     const match = String(item.jumlah_paket).match(/Nasi:\s*(\d+)\s*\(@\s*(\d+)\)\s*\|\s*Snack:\s*(\d+)\s*\(@\s*(\d+)\)/);
                                     if (match) {
                                       const qNasi = parseInt(match[1]), hNasi = parseInt(match[2]), qSnack = parseInt(match[3]), hSnack = parseInt(match[4]);
-                                      subTotal = (qNasi * hNasi) + (qSnack * hSnack);
-                                      dppn = subTotal * 0.10;
+                                      itemSubTotal = (qNasi * hNasi) + (qSnack * hSnack);
+                                      dppn = itemSubTotal * 0.10;
                                       detailManual = { qNasi, hNasi, totNasi: qNasi*hNasi, qSnack, hSnack, totSnack: qSnack*hSnack };
                                     }
                                   } else {
-                                    subTotal = parseRibuan(item.jumlah_paket) * 61700;
-                                    dppn = subTotal * 0.10;
+                                    itemSubTotal = parseRibuan(item.jumlah_paket) * 61700;
+                                    dppn = itemSubTotal * 0.10;
                                   }
 
                                   return (
                                     <React.Fragment key={item.id}>
-                                      <tr onClick={() => toggleRow(item.id)} className={`transition-all duration-300 cursor-pointer group bg-white border-b border-slate-50 border-l-[6px] ${isExpanded ? 'border-l-blue-500 bg-blue-50/50 shadow-inner' : 'border-l-slate-200 hover:border-l-blue-400 hover:bg-slate-50/80'}`}>
-                                        <td className="p-4 pl-6 align-top">
-                                          <div className="flex items-start gap-4">
-                                            <div className={`mt-1 p-1 rounded-md transition-colors ${isExpanded ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500'}`}>
-                                                <ChevronDown size={14} strokeWidth={3} className={`transform transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
-                                            </div>
+                                      <tr onClick={(e) => { e.stopPropagation(); toggleMaminRow(item.id); }} className={`cursor-pointer transition-colors group ${isRowExpanded ? 'bg-blue-50/40' : 'bg-white hover:bg-slate-50/80'}`}>
+                                        <td className="p-4 pl-8 md:pl-10 align-top">
+                                          <div className="flex items-start gap-3">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-slate-300 mt-2 shrink-0 group-hover:bg-blue-400 transition-colors"></div>
                                             <div className="min-w-0 flex-1">
                                               <div className="font-extrabold text-slate-700 text-sm md:text-base leading-snug break-words group-hover:text-blue-600 transition-colors">{item.nama_rapat}</div>
                                               <div className="text-xs flex flex-wrap gap-2 items-center text-slate-500 mt-2">
@@ -1407,19 +1440,17 @@ export default function App() {
                                         </td>
                                         <td className="p-4 text-right font-black text-blue-600 text-sm md:text-base whitespace-nowrap align-top"><AnimatedNominal value={item.realisasi_anggaran} /></td>
                                         <td className="p-4 align-top">
-                                          <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={(e) => { e.stopPropagation(); editData(item, 'Sheet1'); }} className="p-1.5 text-yellow-600 bg-yellow-50 rounded-lg hover:bg-yellow-100 hover:shadow-sm transition-all"><Edit size={14} strokeWidth={2.5}/></button>
-                                            <button onClick={(e) => { e.stopPropagation(); triggerDelete(item.id, item.nama_rapat, 'Sheet1'); }} className="p-1.5 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 hover:shadow-sm transition-all"><Trash2 size={14} strokeWidth={2.5}/></button>
+                                          <div className="flex justify-center gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={(e) => { e.stopPropagation(); editData(item, 'Sheet1'); }} className="p-2 text-yellow-600 bg-yellow-50 rounded-xl hover:bg-yellow-100 hover:shadow-sm transition-all"><Edit size={16} strokeWidth={2.5}/></button>
+                                            <button onClick={(e) => { e.stopPropagation(); triggerDelete(item.id, item.nama_rapat, 'Sheet1'); }} className="p-2 text-red-500 bg-red-50 rounded-xl hover:bg-red-100 hover:shadow-sm transition-all"><Trash2 size={16} strokeWidth={2.5}/></button>
                                           </div>
                                         </td>
                                       </tr>
-                                      
-                                      {/* BARIS LEVEL 3: RINCIAN KALKULASI RAPAT */}
-                                      {isExpanded && (
-                                        <tr>
-                                          <td colSpan="4" className="p-0 border-b border-slate-100 bg-slate-50/80 border-l-[6px] border-l-blue-500 shadow-inner">
-                                            <div className="overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
-                                              <div className="m-5 ml-14 mt-2 border border-blue-100/50 rounded-2xl bg-white p-5 md:p-6 shadow-sm">
+                                      {isRowExpanded && (
+                                        <tr className="bg-slate-50/60 shadow-inner">
+                                          <td colSpan="4" className="p-0 border-b border-slate-200">
+                                            <div className="overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
+                                              <div className="m-4 ml-10 md:ml-12 border border-slate-200/60 rounded-2xl bg-white p-5 shadow-sm">
                                                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                                                   <div>
                                                     <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-4 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> Informasi Rapat</h4>
@@ -1437,8 +1468,8 @@ export default function App() {
                                                           <div className="flex justify-between"><span className="text-slate-500 shrink-0 mr-2">{detailManual.qNasi} Nasi (@ {formatRibuan(detailManual.hNasi)})</span> <span className="font-bold text-slate-800 whitespace-nowrap"><AnimatedNominal value={detailManual.totNasi} /></span></div>
                                                           <div className="flex justify-between"><span className="text-slate-500 shrink-0 mr-2">{detailManual.qSnack} Snack (@ {formatRibuan(detailManual.hSnack)})</span> <span className="font-bold text-slate-800 whitespace-nowrap"><AnimatedNominal value={detailManual.totSnack} /></span></div>
                                                         </>
-                                                      ) : ( <div className="flex justify-between"><span className="text-slate-500 shrink-0 mr-2">{formatRibuan(item.jumlah_paket)} Paket (Nasi+Snack)</span> <span className="font-bold text-slate-800 whitespace-nowrap"><AnimatedNominal value={subTotal} /></span></div> )}
-                                                      <div className="flex justify-between pt-3 border-t border-slate-200/60"><span className="text-slate-500">Subtotal Harga Nego:</span> <span className="font-bold text-slate-800 whitespace-nowrap"><AnimatedNominal value={subTotal} /></span></div>
+                                                      ) : ( <div className="flex justify-between"><span className="text-slate-500 shrink-0 mr-2">{formatRibuan(item.jumlah_paket)} Paket (Nasi+Snack)</span> <span className="font-bold text-slate-800 whitespace-nowrap"><AnimatedNominal value={itemSubTotal} /></span></div> )}
+                                                      <div className="flex justify-between pt-3 border-t border-slate-200/60"><span className="text-slate-500">Subtotal Harga Nego:</span> <span className="font-bold text-slate-800 whitespace-nowrap"><AnimatedNominal value={itemSubTotal} /></span></div>
                                                       <div className="flex justify-between"><span className="text-slate-500">PPN (10%):</span> <span className="font-bold text-slate-800 whitespace-nowrap"><AnimatedNominal value={dppn} /></span></div>
                                                       <div className="flex justify-between pt-3 mt-1 border-t border-slate-200 min-w-0"><span className="font-black text-blue-900 tracking-wide truncate">Total Realisasi:</span> <span className="font-black text-blue-600 text-lg truncate" title={formatRp(totalRealisasi)}><AnimatedNominal value={totalRealisasi} /></span></div>
                                                     </div>
@@ -1454,8 +1485,8 @@ export default function App() {
                                 })}
                               </React.Fragment>
                             );
-                          });
-                        })()}
+                          })
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -1468,15 +1499,13 @@ export default function App() {
           {activeTab === 'perdin' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               
-              {/* PANEL KIRI: FORM INPUT / PREDIKTOR PERDIN */}
               <div className="lg:col-span-5 2xl:col-span-4 anim-fade-up">
                 <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden sticky top-6">
                   
-                  {/* TOGGLE MODE */}
                   <div className="p-5 border-b border-slate-100/50 flex justify-between items-center bg-slate-50/50 backdrop-blur-md">
                      <div className="flex w-full bg-slate-200/50 p-1 rounded-xl">
                        <button type="button" onClick={() => setPerdinMode('input')} className={`flex-1 px-4 py-2.5 text-[10px] sm:text-xs font-extrabold uppercase tracking-widest rounded-lg transition-all ${perdinMode === 'input' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Input Realisasi</button>
-                       <button type="button" onClick={() => setPerdinMode('predict')} className={`flex-1 px-4 py-2.5 text-[10px] sm:text-xs font-extrabold uppercase tracking-widest rounded-lg transition-all ${perdinMode === 'predict' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Rencana Perjalanan</button>
+                       <button type="button" onClick={() => setPerdinMode('predict')} className={`flex-1 px-4 py-2.5 text-[10px] sm:text-xs font-extrabold uppercase tracking-widest rounded-lg transition-all ${perdinMode === 'predict' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Rencana Draft</button>
                      </div>
                   </div>
                   
@@ -1550,13 +1579,15 @@ export default function App() {
                       </div>
                     </form>
                   ) : (
-                    // MODE KALKULATOR PREDIKTOR (RENCANA PERJALANAN / DRAFT)
                     <div className="p-6 md:p-8 animate-in fade-in zoom-in-95 duration-300">
                       <div className="space-y-5 mb-6">
                         <div>
                           <label className="block text-[11px] font-extrabold text-slate-500 mb-2 uppercase tracking-widest">1. Pilih Sub Kegiatan</label>
                           <div className="relative group">
-                            <select name="sub_kegiatan" value={predictForm.sub_kegiatan} onChange={handlePredictChange} className="w-full p-3.5 text-sm bg-slate-50 font-semibold border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none appearance-none cursor-pointer shadow-inner transition-all text-slate-700">
+                            <select name="sub_kegiatan" value={predictForm.sub_kegiatan} onChange={(e) => {
+                                setPredictForm({ ...predictForm, sub_kegiatan: e.target.value });
+                                setDraftCart([]); 
+                            }} className="w-full p-3.5 text-sm bg-slate-50 font-semibold border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none appearance-none cursor-pointer shadow-inner transition-all text-slate-700">
                               <option value="" disabled>-- Pilih Sub Kegiatan --</option>
                               {currentSub.filter(s => getPaguKategori(s, 'perdin') > 0).map((sub, idx) => (<option key={idx} value={sub.nama_sub}>{sub.nama_sub}</option>))}
                             </select>
@@ -1568,80 +1599,89 @@ export default function App() {
                           <div className="animate-in fade-in slide-in-from-top-4 duration-300">
                             
                             <div className="flex justify-between items-center p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 mb-6">
-                              <span className="text-[10px] font-black uppercase tracking-widest text-indigo-800 flex items-center gap-1.5"><Wallet size={14}/> Sisa Anggaran</span>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-indigo-800 flex items-center gap-1.5"><Wallet size={14}/> Sisa Anggaran Tersedia</span>
                               <span className="text-lg font-black text-indigo-700"><AnimatedNominal value={sisaAnggaranPredict} /></span>
                             </div>
 
-                            <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50/50 shadow-inner">
-                              <label className="block text-[11px] font-extrabold text-slate-500 mb-4 uppercase tracking-widest border-b border-slate-200 pb-2">2. Tambahkan Rencana</label>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <div>
-                                  <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Lokasi / Daerah (Riwayat)</label>
-                                  <div className="relative group">
-                                    <select name="lokasi" value={predictForm.lokasi} onChange={handlePredictChange} className="w-full p-3 text-sm bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/50 shadow-sm appearance-none cursor-pointer text-slate-700 font-semibold">
-                                      <option value="" disabled>-- Pilih Daerah --</option>
-                                      {suggestionList.map(s => <option key={s.lokasi} value={s.lokasi}>{s.lokasi}</option>)}
-                                    </select>
-                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400"><ChevronDown size={14}/></div>
-                                  </div>
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+                              <div className="lg:col-span-1">
+                                <label className="block text-[11px] font-extrabold text-slate-500 mb-2 uppercase tracking-widest">2. Tujuan / Lokasi</label>
+                                <div className="relative">
+                                  <select name="lokasi" value={predictForm.lokasi} onChange={(e) => {
+                                      const loc = e.target.value;
+                                      const locData = suggestionList.find(s => s.lokasi === loc);
+                                      setPredictForm({ 
+                                         ...predictForm, 
+                                         lokasi: loc, 
+                                         estimasi_biaya: locData ? formatRibuan(locData.avgCost) : '' 
+                                      });
+                                  }} className="w-full p-3.5 text-sm bg-white border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 shadow-sm transition-all appearance-none">
+                                     <option value="">Pilih dari Riwayat...</option>
+                                     {suggestionList.map((s, idx) => <option key={idx} value={s.lokasi}>{s.lokasi}</option>)}
+                                  </select>
+                                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400"><ChevronDown size={14}/></div>
                                 </div>
-                                <div>
-                                  <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Estimasi Biaya (Rp)</label>
-                                  <input type="text" name="estimasi_biaya" value={predictForm.estimasi_biaya} onChange={handlePredictChange} className="w-full p-3 text-sm bg-white border border-amber-300 rounded-xl outline-none focus:ring-2 focus:ring-amber-500/50 shadow-sm transition-all font-black text-amber-900" placeholder="Ketik nominal manual..." />
-                                </div>
+                                <input type="text" placeholder="Atau ketik manual..." value={predictForm.lokasi} onChange={(e) => setPredictForm({...predictForm, lokasi: e.target.value})} className="w-full mt-2 p-3 text-sm bg-white border border-slate-200 rounded-xl outline-none focus:border-indigo-500 shadow-sm" />
                               </div>
-                              <button type="button" onClick={addDraftToCart} disabled={!predictForm.lokasi || !predictForm.estimasi_biaya} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                                <PlusCircle size={16} strokeWidth={3}/> Tambahkan Ke Rencana
-                              </button>
+                              
+                              <div className="lg:col-span-1">
+                                <label className="block text-[11px] font-extrabold text-slate-500 mb-2 uppercase tracking-widest">3. Estimasi Biaya (Rp)</label>
+                                <input type="text" name="estimasi_biaya" value={predictForm.estimasi_biaya} onChange={(e) => setPredictForm({...predictForm, estimasi_biaya: formatRibuan(e.target.value)})} className="w-full p-3.5 text-sm bg-white border border-amber-300 rounded-2xl outline-none focus:ring-4 focus:ring-amber-500/20 shadow-sm transition-all font-black text-amber-900" placeholder="Ketik nominal..." />
+                              </div>
+
+                              <div className="lg:col-span-1 flex items-end">
+                                <button type="button" onClick={addToCart} disabled={!predictForm.lokasi || !predictForm.estimasi_biaya} className="w-full p-3.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-bold rounded-2xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                                  <PlusCircle size={18}/> Tambah ke Rencana
+                                </button>
+                              </div>
                             </div>
 
-                            {/* Keranjang Draft Rencana */}
-                            {cartPredict.length > 0 && (
-                              <div className="mt-6">
-                                <label className="block text-[11px] font-extrabold text-slate-500 mb-3 uppercase tracking-widest">Daftar Keberangkatan Anda</label>
-                                <div className="space-y-2 mb-4">
-                                  {cartPredict.map((item) => (
-                                    <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200 shadow-sm group">
-                                      <div className="flex items-center gap-3 min-w-0">
-                                        <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg"><MapPin size={14} strokeWidth={2.5}/></div>
-                                        <span className="text-sm font-bold text-slate-700 truncate">{item.lokasi}</span>
-                                      </div>
-                                      <div className="flex items-center gap-3 shrink-0">
-                                        <span className="text-sm font-black text-indigo-600"><AnimatedNominal value={item.cost} /></span>
-                                        <button onClick={() => removeDraftFromCart(item.id)} className="text-slate-400 hover:text-red-500 p-1"><XCircle size={16}/></button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-
-                                {/* Hasil Prediksi Keseluruhan */}
-                                <div className={`p-5 rounded-3xl border relative overflow-hidden transition-colors duration-500 ${isPredictSafe ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
-                                   <div className={`absolute -top-10 -right-10 w-40 h-40 rounded-full blur-3xl opacity-40 ${isPredictSafe ? 'bg-emerald-200' : 'bg-red-200'}`}></div>
-                                   <div className="relative z-10 flex items-start gap-4">
-                                     <div className={`p-3 rounded-2xl text-white ${isPredictSafe ? 'bg-emerald-500 shadow-[0_4px_15px_rgba(16,185,129,0.3)]' : 'bg-red-500 shadow-[0_4px_15px_rgba(239,68,68,0.3)]'}`}>
-                                       {isPredictSafe ? <CheckCircle size={24} /> : <XCircle size={24} />}
-                                     </div>
-                                     <div className="flex-1 min-w-0">
-                                       <h4 className={`text-xs md:text-sm font-black uppercase tracking-wider mb-1 ${isPredictSafe ? 'text-emerald-800' : 'text-red-800'}`}>
-                                         {isPredictSafe ? 'STATUS AMAN' : 'DANA TIDAK MENCUKUPI'}
-                                       </h4>
-                                       <p className={`text-[11px] md:text-xs font-semibold mb-3 ${isPredictSafe ? 'text-emerald-600' : 'text-red-600'}`}>
-                                         {isPredictSafe 
-                                           ? `Anggaran memadai untuk ${cartPredict.length} rencana perjalanan.` 
-                                           : `Anggaran kurang ${formatRp(Math.abs(sisaSetelahPredict))} untuk merealisasikan rencana ini.`}
-                                       </p>
-                                       <div className="bg-white/60 backdrop-blur-sm p-3 rounded-xl border border-white/50 flex justify-between items-center">
-                                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Sisa Akhir Anggaran:</span>
-                                         <span className={`text-base md:text-lg font-black truncate ${isPredictSafe ? 'text-emerald-700' : 'text-red-600'}`} title={formatRp(isPredictSafe ? sisaSetelahPredict : 0)}>
-                                            <AnimatedNominal value={isPredictSafe ? sisaSetelahPredict : 0} />
-                                         </span>
+                            {draftCart.length > 0 && (
+                              <div className="mb-6 border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50">
+                                 <div className="p-3 bg-slate-100/50 border-b border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-widest">Daftar Rencana Perjalanan</div>
+                                 <div className="p-2 space-y-2">
+                                   {draftCart.map((item, idx) => (
+                                     <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                                       <div className="flex items-center gap-3">
+                                         <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-black">{idx + 1}</div>
+                                         <span className="font-bold text-slate-700 text-sm">{item.lokasi}</span>
+                                       </div>
+                                       <div className="flex items-center gap-4">
+                                         <span className="font-black text-indigo-600">{formatRp(item.biaya)}</span>
+                                         <button type="button" onClick={() => removeFromCart(item.id)} className="text-slate-400 hover:text-red-500"><XCircle size={18}/></button>
                                        </div>
                                      </div>
-                                   </div>
-                                </div>
+                                   ))}
+                                 </div>
                               </div>
                             )}
 
+                            {(draftCart.length > 0) && (
+                              <div className={`p-5 rounded-3xl border relative overflow-hidden animate-in fade-in duration-500 ${isPredictSafe ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
+                                 <div className={`absolute -top-10 -right-10 w-40 h-40 rounded-full blur-3xl opacity-40 ${isPredictSafe ? 'bg-emerald-200' : 'bg-red-200'}`}></div>
+                                 <div className="relative z-10 flex items-start gap-4">
+                                   <div className={`p-3 rounded-2xl text-white ${isPredictSafe ? 'bg-emerald-500 shadow-[0_4px_15px_rgba(16,185,129,0.3)]' : 'bg-red-500 shadow-[0_4px_15px_rgba(239,68,68,0.3)]'}`}>
+                                     {isPredictSafe ? <CheckCircle size={24} /> : <XCircle size={24} />}
+                                   </div>
+                                   <div className="flex-1 min-w-0">
+                                     <h4 className={`text-xs md:text-sm font-black uppercase tracking-wider mb-1 ${isPredictSafe ? 'text-emerald-800' : 'text-red-800'}`}>
+                                       {isPredictSafe ? 'STATUS AMAN' : 'DANA TIDAK MENCUKUPI'}
+                                     </h4>
+                                     <p className={`text-[11px] md:text-xs font-semibold mb-3 ${isPredictSafe ? 'text-emerald-600' : 'text-red-600'}`}>
+                                       {isPredictSafe 
+                                         ? `Total rencana perjalanan sebesar ${formatRp(totalDraftCost)} masih dalam batas anggaran.` 
+                                         : `Anggaran Anda kurang ${formatRp(Math.abs(sisaSetelahPredict))} untuk seluruh rencana ini.`}
+                                     </p>
+                                     <div className="bg-white/60 backdrop-blur-sm p-3 rounded-xl border border-white/50 flex justify-between items-center">
+                                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Sisa Anggaran Akhir:</span>
+                                       <span className={`text-base md:text-lg font-black truncate ${isPredictSafe ? 'text-emerald-700' : 'text-red-600'}`} title={formatRp(isPredictSafe ? sisaSetelahPredict : 0)}>
+                                          <AnimatedNominal value={isPredictSafe ? sisaSetelahPredict : 0} />
+                                       </span>
+                                     </div>
+                                   </div>
+                                 </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1651,10 +1691,8 @@ export default function App() {
                 </div>
               </div>
 
-              {/* PANEL KANAN: REKAP DAN RIWAYAT PERDIN */}
               <div className="lg:col-span-7 2xl:col-span-8 flex flex-col gap-6 anim-fade-right">
                 
-                {/* Panel Ringkasan Pagu Perdin */}
                 <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-6 md:p-8">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-6 border-b border-slate-100/70">
                     <h3 className="font-extrabold text-slate-800 text-lg flex items-center gap-3"><Filter className="text-indigo-500" size={22} strokeWidth={2.5}/> Rekap Anggaran Perdin</h3>
@@ -1673,7 +1711,7 @@ export default function App() {
                       <div className="text-base sm:text-lg lg:text-base xl:text-lg font-black text-slate-700 truncate" title={formatRp(currentPaguPerdinSummary)}><AnimatedNominal value={currentPaguPerdinSummary} /></div>
                     </div>
                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center min-w-0">
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 truncate">Realisasi (Dashboard)</div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 truncate">Terealisasi</div>
                       <div className="text-base sm:text-lg lg:text-base xl:text-lg font-black text-red-500 truncate" title={formatRp(historyPerdinSum)}><AnimatedNominal value={historyPerdinSum} /></div>
                     </div>
                     <div className="bg-indigo-50/80 p-4 rounded-2xl border border-indigo-100 text-center min-w-0 flex flex-col justify-center relative overflow-hidden">
@@ -1699,7 +1737,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Tabel Riwayat Perdin dengan Paginasi */}
                 <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden flex-1 flex flex-col">
                   <div className="p-6 md:p-8 border-b border-slate-100/50 flex justify-between items-center bg-slate-50/30">
                     <h3 className="font-extrabold text-slate-800 text-lg flex items-center gap-3"><Clock className="text-slate-400" size={22} strokeWidth={2.5}/> Riwayat Perjalanan</h3>
@@ -1708,13 +1745,13 @@ export default function App() {
                     </button>
                   </div>
                   <div className="p-0 overflow-x-auto flex-1">
-                    <table className="w-full text-left border-collapse min-w-[800px]">
+                    <table className="w-full text-left border-collapse min-w-[700px]">
                       <thead className="bg-slate-50/80 text-slate-400 text-[10px] uppercase tracking-widest font-black">
                         <tr>
-                          <th className="p-5 font-bold border-b border-slate-100 pl-8">Lokasi & Tujuan</th>
+                          <th className="p-5 font-bold border-b border-slate-100">Informasi & Lokasi</th>
                           <th className="p-5 font-bold w-64 border-b border-slate-100">Rincian Anggota</th>
                           <th className="p-5 text-right font-bold w-36 border-b border-slate-100">Total (Rp)</th>
-                          <th className="p-5 text-center font-bold w-24 border-b border-slate-100">Aksi</th>
+                          <th className="p-5 text-center font-bold w-32 border-b border-slate-100">Aksi</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -1726,38 +1763,39 @@ export default function App() {
                             try { parsedPeserta = JSON.parse(item.rincian_peserta); } catch(e){}
                             
                             const totalNominalReal = getPerdinTotal(item);
-                            const isRealized = String(item.status_realisasi) !== 'false';
 
                             return (
                               <tr key={index} className="hover:bg-slate-50/80 transition-colors align-top group">
                                 <td className="p-5 min-w-[200px]">
-                                  <div className="flex items-start gap-3">
-                                    <button onClick={() => toggleRealisasiPerdin(item)} className={`mt-0.5 p-1.5 rounded-lg border transition-colors shrink-0 flex items-center gap-1 ${isRealized ? 'bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm' : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'}`} title={isRealized ? 'Terealisasi (Masuk Dashboard)' : 'Hanya Draft (Belum Masuk Dashboard)'}>
-                                      {isRealized ? <CheckCircle size={16} strokeWidth={3}/> : <XCircle size={16} strokeWidth={3}/>}
-                                    </button>
-                                    <div className="min-w-0">
-                                      <div className={`font-extrabold text-sm md:text-base leading-snug break-words group-hover:text-indigo-600 transition-colors ${isRealized ? 'text-slate-800' : 'text-slate-500'}`}>{item.lokasi}</div>
-                                      {item.tujuan && <div className={`text-[11px] font-bold uppercase tracking-widest mt-1.5 leading-snug break-words ${isRealized ? 'text-indigo-500' : 'text-slate-400'}`}>{item.tujuan}</div>}
-                                      <div className="text-xs flex flex-wrap gap-2 items-center text-slate-500 mt-2.5">
-                                        <span className="bg-white border border-slate-200 shadow-sm px-2.5 py-1 rounded-lg text-[10px] uppercase font-bold text-slate-600 whitespace-nowrap">{String(item.timestamp).substring(0, 10)}</span>
-                                        <span className="leading-tight font-medium break-words">{item.sub_kegiatan}</span>
-                                      </div>
-                                    </div>
+                                  <div className="font-extrabold text-slate-700 text-sm md:text-base leading-snug break-words group-hover:text-indigo-600 transition-colors">{item.lokasi}</div>
+                                  {item.tujuan && <div className="text-[11px] font-bold text-indigo-500 uppercase tracking-widest mt-1.5 leading-snug break-words">{item.tujuan}</div>}
+                                  <div className="text-xs flex flex-wrap gap-2 items-center text-slate-500 mt-2.5">
+                                    <span className="bg-white border border-slate-200 shadow-sm px-2.5 py-1 rounded-lg text-[10px] uppercase font-bold text-slate-600 whitespace-nowrap">{String(item.timestamp).substring(0, 10)}</span>
+                                    <span className="leading-tight font-medium break-words">{item.sub_kegiatan}</span>
                                   </div>
                                 </td>
                                 <td className="p-5">
                                   <div className="flex flex-col gap-2">
                                     {parsedPeserta.map((p, i) => (
-                                      <div key={i} className={`flex justify-between items-center text-xs bg-white border shadow-sm px-3 py-2 rounded-xl group/peserta transition-colors ${isRealized ? 'border-slate-200 text-slate-600 hover:border-indigo-200' : 'border-slate-100 text-slate-400'}`}>
-                                        <span className={`font-bold break-words leading-tight mr-2 transition-colors ${isRealized ? 'group-hover/peserta:text-indigo-600' : ''}`} title={p.nama}>{p.nama}</span>
-                                        <span className={`font-black whitespace-nowrap ${isRealized ? 'text-slate-800' : 'text-slate-400'}`}>{p.nominal}</span>
+                                      <div key={i} className="flex justify-between items-center text-xs bg-white border border-slate-200 shadow-sm text-slate-600 px-3 py-2 rounded-xl group/peserta hover:border-indigo-200 transition-colors">
+                                        <span className="font-bold break-words leading-tight mr-2 group-hover/peserta:text-indigo-600 transition-colors" title={p.nama}>{p.nama}</span>
+                                        <span className="font-black text-slate-800 whitespace-nowrap">{p.nominal}</span>
                                       </div>
                                     ))}
                                   </div>
                                 </td>
-                                <td className={`p-5 text-right font-black text-sm md:text-base whitespace-nowrap ${isRealized ? 'text-indigo-600' : 'text-slate-400'}`} title={formatRp(totalNominalReal)}><AnimatedNominal value={totalNominalReal} /></td>
-                                <td className="p-5">
+                                <td className={`p-5 text-right font-black text-sm md:text-base whitespace-nowrap align-top ${isRealized(item) ? 'text-indigo-600' : 'text-slate-400 line-through'}`} title={formatRp(totalNominalReal)}>
+                                  <AnimatedNominal value={totalNominalReal} />
+                                </td>
+                                <td className="p-5 align-top">
                                   <div className="flex justify-center gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
+                                    <button 
+                                      onClick={() => toggleRealisasiPerdin(item)} 
+                                      title={isRealized(item) ? "Batalkan Realisasi" : "Tandai Terealisasi"}
+                                      className={`p-2 rounded-xl hover:shadow-sm transition-all ${isRealized(item) ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100' : 'text-slate-400 bg-slate-100 hover:bg-slate-200'}`}
+                                    >
+                                      {isRealized(item) ? <CheckCircle size={16} strokeWidth={2.5}/> : <ToggleLeft size={16} strokeWidth={2.5}/>}
+                                    </button>
                                     <button onClick={() => editData(item, 'Perdin')} className="p-2 text-yellow-600 bg-yellow-50 rounded-xl hover:bg-yellow-100 hover:shadow-sm transition-all"><Edit size={16} strokeWidth={2.5}/></button>
                                     <button onClick={() => triggerDelete(item.id, item.lokasi, 'Perdin')} className="p-2 text-red-500 bg-red-50 rounded-xl hover:bg-red-100 hover:shadow-sm transition-all"><Trash2 size={16} strokeWidth={2.5}/></button>
                                   </div>
@@ -1770,7 +1808,6 @@ export default function App() {
                     </table>
                   </div>
                   
-                  {/* KOMPONEN KONTROL PAGINASI */}
                   {totalPagesPerdin > 1 && (
                     <div className="p-5 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
                       <span className="text-xs text-slate-400 font-bold uppercase tracking-widest">
