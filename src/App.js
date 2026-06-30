@@ -4,13 +4,13 @@ import {
   Send, Plane, LayoutDashboard, Layers, ChevronRight, Menu, X, 
   ChevronDown, LogOut, PlusCircle, Filter, Calculator, BookOpen, 
   Pencil, Calendar, RefreshCw, Receipt, 
-  Zap, PenTool, FileText, Router, Monitor, Banknote, Package, Server, Cloud, Printer, Scissors, Check
+  Zap, PenTool, FileText, Router, Monitor, Banknote, Package, Server, Cloud, Printer, Scissors, Check, AlertTriangle,
+  MapPin, TrendingUp, CheckCircle, XCircle, Lightbulb, Eye, EyeOff
 } from 'lucide-react';
 
 // URL WEB APP GOOGLE SCRIPT SUDAH DIPERBARUI
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzFdFFd0-ekvC6di-RUXHBOvMMun67ytCBcrzORG-Ip0Q_I3oQb51Te3OvglHYPhxb-/exec';
 
-// FUNGSI AUTO-KAPITAL HURUF DEPAN
 const toTitleCase = (str) => {
   if (!str) return '';
   return str.replace(/\w\S*/g, function(txt) {
@@ -18,7 +18,6 @@ const toTitleCase = (str) => {
   });
 };
 
-// --- FUNGSI PEMILIH IKON CERDAS BERDASARKAN KATA KUNCI ---
 const getCategoryIcon = (name) => {
   const lower = name.toLowerCase();
   if (lower.includes('listrik') || lower.includes('daya') || lower.includes('token')) return Zap;
@@ -30,10 +29,9 @@ const getCategoryIcon = (name) => {
   if (lower.includes('server') || lower.includes('hosting') || lower.includes('domain')) return Server;
   if (lower.includes('langganan') || lower.includes('cloud') || lower.includes('zoom')) return Cloud;
   if (lower.includes('cetak') || lower.includes('printer') || lower.includes('tinta')) return Printer;
-  return Package; // Default Icon
+  return Package; 
 };
 
-// --- KOMPONEN ANIMASI NOMINAL UANG ---
 const AnimatedNominal = ({ value }) => {
   const [currentValue, setCurrentValue] = useState(0);
 
@@ -66,6 +64,28 @@ const AnimatedNominal = ({ value }) => {
   return <span>{formatRp(currentValue)}</span>;
 };
 
+// --- KOMPONEN PROGRESS BAR VISUAL (GRAFIK SERAPAN) ---
+const ProgressBar = ({ realisasi, pagu }) => {
+  const [width, setWidth] = useState(0);
+  const percentValue = pagu > 0 ? (realisasi / pagu) * 100 : 0;
+  const safePercent = Math.min(Math.max(percentValue, 0), 100);
+  
+  let colorClass = 'bg-emerald-500'; // Aman (<50%)
+  if (percentValue >= 80) colorClass = 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'; // Kritis (>=80%)
+  else if (percentValue >= 50) colorClass = 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]'; // Waspada (>=50%)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setWidth(safePercent), 300);
+    return () => clearTimeout(timer);
+  }, [safePercent]);
+
+  return (
+    <div className="w-full bg-slate-100/80 h-1.5 md:h-2 rounded-full mt-2.5 overflow-hidden flex shadow-inner relative">
+      <div className={`h-full ${colorClass} transition-all duration-1000 ease-out`} style={{ width: `${width}%` }}></div>
+    </div>
+  );
+};
+
 const formatRibuan = (angka) => {
   if (!angka) return '';
   return new Intl.NumberFormat('id-ID').format(angka.toString().replace(/[^0-9]/g, ''));
@@ -73,7 +93,6 @@ const formatRibuan = (angka) => {
 const parseRibuan = (str) => parseInt(str?.toString().replace(/[^0-9]/g, ''), 10) || 0;
 const formatRp = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka || 0);
 
-// --- HELPER UNTUK KATEGORI BELANJA ---
 const parseKategori = (item) => {
   if (item.kategori_belanja && item.kategori_belanja.startsWith('[')) {
     try { return JSON.parse(item.kategori_belanja); } catch(e){}
@@ -124,16 +143,13 @@ export default function App() {
   const [dataSub, setDataSub] = useState([]); 
   const [dataPerdin, setDataPerdin] = useState([]); 
   
-  const currentMamin = dataMamin
-    .filter(item => (item.tahun ? String(item.tahun) : '2026') === String(selectedYear))
-    .map(item => ({
-      ...item,
-      kategori_belanja: item.kategori_belanja || 'Makan Minum Rapat' // Penyelamat data lama
-    }));
+  const currentMamin = dataMamin.filter(item => (item.tahun ? String(item.tahun) : '2026') === String(selectedYear));
   const currentSub = dataSub.filter(item => (item.tahun ? String(item.tahun) : '2026') === String(selectedYear));
   const currentPerdin = dataPerdin.filter(item => (item.tahun ? String(item.tahun) : '2026') === String(selectedYear));
 
-  // MENDAPATKAN KATEGORI DINAMIS
+  // PERDIN YANG SUDAH DIREASILASIKAN (Untuk memotong Sisa Anggaran di Dashboard)
+  const validPerdin = currentPerdin.filter(p => String(p.status_realisasi) !== 'false');
+
   const allCategoriesSet = new Set();
   currentSub.forEach(sub => {
     parseKategori(sub).forEach(k => {
@@ -150,6 +166,7 @@ export default function App() {
   const [isEditing, setIsEditing] = useState(false);
   const [dialog, setDialog] = useState({ isOpen: false, type: '', targetSheet: '', title: '', message: '', targetId: null });
   const [expandedRow, setExpandedRow] = useState(null);
+  const [expandedSub, setExpandedSub] = useState(null); // State untuk pengelompokan riwayat Mamin
 
   const [currentPagePerdin, setCurrentPagePerdin] = useState(1);
   const itemsPerPage = 5;
@@ -162,22 +179,39 @@ export default function App() {
     id: '', sub_kegiatan: '', kategori_belanja: 'Makan Minum Rapat', pagu_mamin: '', pagu_bulanan: '', nama_rapat: '', tanggal_rapat: '', 
     jumlah_paket: '', is_auto: true, qty_nasi: '', harga_nasi: '', qty_snack: '', harga_snack: '' 
   });
+  
+  // STATE PERDIN
+  const [perdinMode, setPerdinMode] = useState('input'); // 'input' | 'predict'
   const [formPerdin, setFormPerdin] = useState({
     id: '', sub_kegiatan: '', tujuan: '', lokasi: '', peserta: [{ nama: '', nominal: '' }]
   });
+  const [predictForm, setPredictForm] = useState({ sub_kegiatan: '', lokasi: '', estimasi_biaya: '' });
+  const [cartPredict, setCartPredict] = useState([]); // Keranjang Draft Perdin
+
   const [formDynamic, setFormDynamic] = useState({
     id: '', sub_kegiatan: '', keterangan: '', tanggal: '', nominal: '', pagu: 0
   });
 
   const [filterPerdin, setFilterPerdin] = useState('Semua');
 
-  // STATE UNTUK PEMOTONGAN PERDIN
   const [isEditingDiscount, setIsEditingDiscount] = useState(false);
   const [perdinDiscountPct, setPerdinDiscountPct] = useState('');
   const [savedPerdinDiscount, setSavedPerdinDiscount] = useState(() => {
     const saved = localStorage.getItem('perdinDiscount_' + selectedYear);
     return saved ? parseFloat(saved) : 0;
   });
+
+  // STATE UNTUK SEMBUNYIKAN GLOBAL CARDS
+  const [showGlobalCards, setShowGlobalCards] = useState(() => {
+    const saved = localStorage.getItem('showGlobalCards');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+  
+  const toggleGlobalCards = () => {
+    const newValue = !showGlobalCards;
+    setShowGlobalCards(newValue);
+    localStorage.setItem('showGlobalCards', JSON.stringify(newValue));
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem('perdinDiscount_' + selectedYear);
@@ -212,7 +246,7 @@ export default function App() {
 
   const paguMamin = parseRibuan(formMamin.pagu_mamin);
   const historyExcludingCurrent = currentMamin
-    .filter(item => item.id !== formMamin.id && item.sub_kegiatan === formMamin.sub_kegiatan && item.kategori_belanja === formMamin.kategori_belanja)
+    .filter(item => item.id !== formMamin.id && item.sub_kegiatan === formMamin.sub_kegiatan && (item.kategori_belanja || 'Makan Minum Rapat') === formMamin.kategori_belanja)
     .reduce((sum, item) => sum + (parseFloat(item.realisasi_anggaran) || 0), 0);
   const realisasiTotal = historyExcludingCurrent + realisasiAnggaranRapat;
   const sisaMamin = paguMamin - realisasiTotal;
@@ -233,7 +267,8 @@ export default function App() {
     if (s) currentPaguPerdinSummary = getPaguKategori(s, 'perdin');
   }
 
-  const historyPerdinSum = currentPerdin
+  // Menggunakan validPerdin untuk Sisa Anggaran (Hanya yang terealisasi)
+  const historyPerdinSum = validPerdin
     .filter(item => filterPerdin === 'Semua' ? true : item.sub_kegiatan === filterPerdin)
     .reduce((sum, item) => sum + getPerdinTotal(item), 0); 
   const sisaPerdinSummary = currentPaguPerdinSummary - historyPerdinSum;
@@ -241,6 +276,33 @@ export default function App() {
   const filteredPerdinData = currentPerdin.filter(item => filterPerdin === 'Semua' ? true : item.sub_kegiatan === filterPerdin);
   const totalPagesPerdin = Math.ceil(filteredPerdinData.length / itemsPerPage);
   const paginatedPerdinData = filteredPerdinData.slice((currentPagePerdin - 1) * itemsPerPage, currentPagePerdin * itemsPerPage);
+
+  // DATA PREDIKTOR PERDIN (Rencana Perjalanan)
+  const globalPerdinCosts = {};
+  currentPerdin.forEach(p => {
+      if (!p.lokasi) return;
+      const loc = toTitleCase(p.lokasi.trim());
+      if(!globalPerdinCosts[loc]) globalPerdinCosts[loc] = { name: loc, total: 0, count: 0 };
+      globalPerdinCosts[loc].total += getPerdinTotal(p);
+      globalPerdinCosts[loc].count += 1;
+  });
+  const suggestionList = Object.values(globalPerdinCosts).map(c => ({ lokasi: c.name, avgCost: c.total / c.count })).sort((a,b) => a.lokasi.localeCompare(b.lokasi));
+
+  let sisaAnggaranPredict = 0;
+  if (predictForm.sub_kegiatan) {
+      const sData = currentSub.find(s => s.nama_sub === predictForm.sub_kegiatan);
+      if (sData) {
+          const pagu = getPaguKategori(sData, 'perdin');
+          const history = validPerdin.filter(p => p.sub_kegiatan === predictForm.sub_kegiatan).reduce((sum, item) => sum + getPerdinTotal(item), 0);
+          const sisaAwal = pagu - history;
+          sisaAnggaranPredict = savedPerdinDiscount > 0 ? sisaAwal - (sisaAwal * (savedPerdinDiscount / 100)) : sisaAwal;
+      }
+  }
+  
+  // Total dari Keranjang Draft
+  const totalDraftCost = cartPredict.reduce((sum, item) => sum + item.cost, 0);
+  const sisaSetelahPredict = sisaAnggaranPredict - totalDraftCost;
+  const isPredictSafe = sisaSetelahPredict >= 0;
 
   useEffect(() => { fetchData(); }, []);
   useEffect(() => { setFormSub(prev => ({ ...prev, tahun: selectedYear })); }, [selectedYear]);
@@ -292,6 +354,35 @@ export default function App() {
     setFormPerdin({ ...formPerdin, [name]: formattedValue });
   };
 
+  const handlePredictChange = (e) => {
+    const { name, value } = e.target;
+    if (name === 'sub_kegiatan') {
+      setPredictForm({ ...predictForm, [name]: value, lokasi: '', estimasi_biaya: '' });
+      setCartPredict([]);
+    } else if (name === 'lokasi') {
+        const locData = suggestionList.find(s => s.lokasi.toLowerCase() === value.toLowerCase());
+        if (locData) {
+            setPredictForm({ ...predictForm, lokasi: value, estimasi_biaya: formatRibuan(locData.avgCost) });
+        } else {
+            setPredictForm({ ...predictForm, lokasi: value });
+        }
+    } else if (name === 'estimasi_biaya') {
+        setPredictForm({ ...predictForm, estimasi_biaya: formatRibuan(value) });
+    }
+  };
+
+  const addDraftToCart = () => {
+     if(!predictForm.lokasi || !predictForm.estimasi_biaya) return;
+     const cost = parseRibuan(predictForm.estimasi_biaya);
+     if(cost > 0) {
+        setCartPredict([...cartPredict, { lokasi: predictForm.lokasi, cost: cost, id: Date.now() }]);
+        setPredictForm({...predictForm, lokasi: '', estimasi_biaya: ''});
+     }
+  };
+  const removeDraftFromCart = (idToRemove) => {
+     setCartPredict(cartPredict.filter(item => item.id !== idToRemove));
+  };
+
   const handleInputDynamic = (e) => {
     const { name, value } = e.target;
     if (name === 'sub_kegiatan') {
@@ -327,12 +418,30 @@ export default function App() {
     setFormPerdin({ ...formPerdin, peserta: updatedPeserta });
   };
 
+  // FUNGSI TOGGLE REALISASI PERDIN
+  const toggleRealisasiPerdin = async (item) => {
+    const newStatus = String(item.status_realisasi) === 'false' ? 'true' : 'false';
+    
+    // Optimistic update
+    setDataPerdin(prev => prev.map(p => p.id === item.id ? { ...p, status_realisasi: newStatus } : p));
+    
+    if (!SCRIPT_URL.startsWith('http')) return;
+    try {
+      const payload = { sheet: 'Perdin', action: 'update', data: { ...item, status_realisasi: newStatus } };
+      await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+      fetchData(false);
+    } catch (error) {
+      console.error('Error toggle status:', error);
+      fetchData(false);
+    }
+  };
+
   const triggerSave = (e, targetSheet) => {
     e.preventDefault();
     let msg = '';
     if (targetSheet === 'Sheet1') msg = `Simpan data Rapat "${formMamin.nama_rapat}" dengan realisasi ${formatRp(realisasiAnggaranRapat)}?`;
     else if (targetSheet === 'SubKegiatan') msg = `Simpan Master Sub Kegiatan "${formSub.nama_sub}" untuk Tahun ${formSub.tahun || selectedYear}?`;
-    else if (targetSheet === 'Perdin') msg = `Simpan data Perjalanan Dinas ke "${formPerdin.lokasi}" dengan total ${formatRp(currentTotalPerdin)}?`;
+    else if (targetSheet === 'Perdin') msg = `Simpan data Perjalanan Dinas ke "${formPerdin.lokasi}" dengan total ${formatRp(currentTotalPerdin)}? (Akan disimpan sebagai Draft Belum Cair secara default)`;
     else if (targetSheet === 'Dynamic') msg = `Simpan data "${formDynamic.keterangan}" dengan realisasi ${formatRp(parseRibuan(formDynamic.nominal))}?`;
 
     setDialog({ isOpen: true, type: 'save', targetSheet, title: isEditing ? 'Konfirmasi Pembaruan' : 'Konfirmasi Simpan', message: msg, targetId: null });
@@ -365,11 +474,11 @@ export default function App() {
         });
         payloadData = { id: formSub.id, nama_sub: formSub.nama_sub, kategori_belanja: kategoriStr, pagu_anggaran: pMamin, pagu_perdin: pPerdin, tahun: formSub.tahun || selectedYear };
       } else if (targetSheet === 'Perdin') {
-        payloadData = { id: formPerdin.id, sub_kegiatan: formPerdin.sub_kegiatan, tujuan: formPerdin.tujuan, lokasi: formPerdin.lokasi, rincian_peserta: JSON.stringify(formPerdin.peserta), total_nominal: currentTotalPerdin, tahun: selectedYear };
+        payloadData = { id: formPerdin.id, sub_kegiatan: formPerdin.sub_kegiatan, tujuan: formPerdin.tujuan, lokasi: formPerdin.lokasi, rincian_peserta: JSON.stringify(formPerdin.peserta), total_nominal: currentTotalPerdin, tahun: selectedYear, status_realisasi: 'false' };
       } else if (targetSheet === 'Dynamic') {
         const catName = activeTab.replace('dynamic_', '');
         payloadData = { id: formDynamic.id, sub_kegiatan: formDynamic.sub_kegiatan, kategori_belanja: catName, nama_rapat: formDynamic.keterangan, tanggal_rapat: formDynamic.tanggal, realisasi_anggaran: parseRibuan(formDynamic.nominal), tahun: selectedYear };
-        sheetNameAPI = 'Sheet1'; // Backend dinamis tetap numpang di Sheet1
+        sheetNameAPI = 'Sheet1'; 
       }
 
       const optimisticData = { ...payloadData, id: currentIsEditing ? payloadData.id : 'temp-' + Date.now() };
@@ -384,6 +493,7 @@ export default function App() {
         setDataPerdin(prev => currentIsEditing ? prev.map(item => item.id === payloadData.id ? optimisticData : item) : [...prev, optimisticData]);
         setFormPerdin({ id: '', sub_kegiatan: '', tujuan: '', lokasi: '', peserta: [{ nama: '', nominal: '' }] });
         setCurrentPagePerdin(1);
+        setPerdinMode('input'); 
       } else if (targetSheet === 'Dynamic') {
         setDataMamin(prev => currentIsEditing ? prev.map(item => item.id === payloadData.id ? optimisticData : item) : [...prev, optimisticData]);
         setFormDynamic({ id: '', sub_kegiatan: '', keterangan: '', tanggal: '', nominal: '', pagu: 0 });
@@ -437,6 +547,7 @@ export default function App() {
       let parsedPeserta = [{ nama: '', nominal: '' }];
       try { parsedPeserta = JSON.parse(item.rincian_peserta); } catch(e){}
       setFormPerdin({ id: item.id || '', sub_kegiatan: item.sub_kegiatan || '', tujuan: item.tujuan || '', lokasi: item.lokasi || '', peserta: parsedPeserta });
+      setPerdinMode('input');
     } else if (targetSheet === 'Dynamic') {
       const catName = item.kategori_belanja;
       const selectedSub = currentSub.find(sub => sub.nama_sub === item.sub_kegiatan);
@@ -465,20 +576,48 @@ export default function App() {
 
   const toggleRow = (id) => setExpandedRow(prev => prev === id ? null : id);
 
-  // --- DATA DASHBOARD ---
   const totalPaguMaminKeseluruhan = currentSub.reduce((sum, s) => sum + getPaguKategori(s, 'mamin'), 0);
   const maminEntries = currentMamin.filter(item => {
-    const low = (item.kategori_belanja || '').toLowerCase();
-    return low.includes('makan minum') || low.includes('mamin') || (!item.kategori_belanja);
+    const low = (item.kategori_belanja || 'Makan Minum Rapat').toLowerCase();
+    return low.includes('makan minum') || low.includes('mamin');
   });
   const totalRealisasiMaminKeseluruhan = maminEntries.reduce((sum, m) => sum + parseFloat(m.realisasi_anggaran), 0);
   const sisaMaminKeseluruhan = totalPaguMaminKeseluruhan - totalRealisasiMaminKeseluruhan;
 
   const totalPaguPerdinKeseluruhan = currentSub.reduce((sum, s) => sum + getPaguKategori(s, 'perdin'), 0);
-  const totalRealisasiPerdinKeseluruhan = currentPerdin.reduce((sum, p) => sum + getPerdinTotal(p), 0);
+  // Realisasi perdin keseluruhan untuk Sisa Anggaran HANYA yang status valid (true)
+  const totalRealisasiPerdinKeseluruhan = validPerdin.reduce((sum, p) => sum + getPerdinTotal(p), 0);
   const sisaPerdinKeseluruhan = totalPaguPerdinKeseluruhan - totalRealisasiPerdinKeseluruhan;
 
-  // NavItem Component - Enhanced for 3D Modern Look
+  // --- EARLY WARNING SYSTEM (Peringatan Dini) ---
+  const dashboardAlerts = [];
+  if (activeTab === 'dashboard') {
+    currentSub.forEach(sub => {
+      parseKategori(sub).forEach(kategori => {
+        const pagu = parseRibuan(kategori.nominal);
+        if (pagu <= 0) return;
+        
+        const isPerdin = (kategori.nama || '').toLowerCase().includes('perjalanan dinas') || (kategori.nama || '').toLowerCase().includes('perdin');
+        const realisasi = isPerdin 
+          ? validPerdin.filter(item => item.sub_kegiatan === sub.nama_sub).reduce((sum, item) => sum + getPerdinTotal(item), 0)
+          : currentMamin.filter(item => item.sub_kegiatan === sub.nama_sub && (item.kategori_belanja || 'Makan Minum Rapat') === kategori.nama).reduce((sum, item) => sum + (parseFloat(item.realisasi_anggaran) || 0), 0);
+        
+        const sisa = pagu - realisasi;
+        const percentUsed = (realisasi / pagu) * 100;
+        
+        if (percentUsed >= 80) {
+           dashboardAlerts.push({
+             sub: sub.nama_sub,
+             kategori: kategori.nama,
+             percent: percentUsed,
+             sisa: sisa
+           });
+        }
+      });
+    });
+    dashboardAlerts.sort((a, b) => b.percent - a.percent); 
+  }
+
   const NavItem = ({ id, icon: Icon, label }) => (
     <button 
       onClick={() => { setActiveTab(id); setIsMobileMenuOpen(false); cancelEdit(); }} 
@@ -494,50 +633,30 @@ export default function App() {
     </button>
   );
 
-  // ================= HALAMAN UTAMA (LANDING PAGE) =================
   if (!isEntered) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-800 relative overflow-hidden">
-        {/* Soft Background Orbs */}
         <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-40 animate-pulse"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-indigo-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-40 animate-pulse" style={{ animationDelay: '2s' }}></div>
         
         <div className="z-10 flex flex-col items-center animate-in fade-in zoom-in duration-1000">
-          
-          {/* Komposisi Glassmorphism Modern */}
           <div className="relative flex items-center justify-center w-64 h-64 mb-8 mt-4">
             <div className="absolute inset-0 bg-blue-200 blur-3xl opacity-30 rounded-full animate-pulse"></div>
-            
-            <div className="absolute top-2 left-2 bg-indigo-50 p-5 rounded-3xl backdrop-blur-md transform -rotate-12 border border-indigo-100 shadow-xl transition-all duration-700 hover:rotate-0 hover:-translate-y-2">
-              <BookOpen size={64} className="text-indigo-500 drop-shadow-md" />
-            </div>
-            
-            <div className="absolute z-10 bg-white/70 p-8 rounded-[2rem] backdrop-blur-xl border border-white shadow-[0_20px_50px_rgba(0,0,0,0.08)] transform hover:scale-105 hover:-translate-y-2 transition-all duration-500">
-              <Calculator size={84} className="text-blue-600 drop-shadow-lg" />
-            </div>
-
-            <div className="absolute bottom-2 right-2 z-20 bg-blue-50 p-4 rounded-3xl backdrop-blur-md transform rotate-12 border border-blue-100 shadow-xl transition-all duration-700 hover:rotate-45 hover:-translate-y-2">
-              <Pencil size={44} className="text-blue-500 drop-shadow-md" />
-            </div>
+            <div className="absolute top-2 left-2 bg-indigo-50 p-5 rounded-3xl backdrop-blur-md transform -rotate-12 border border-indigo-100 shadow-xl transition-all duration-700 hover:rotate-0 hover:-translate-y-2"><BookOpen size={64} className="text-indigo-500 drop-shadow-md" /></div>
+            <div className="absolute z-10 bg-white/70 p-8 rounded-[2rem] backdrop-blur-xl border border-white shadow-[0_20px_50px_rgba(0,0,0,0.08)] transform hover:scale-105 hover:-translate-y-2 transition-all duration-500"><Calculator size={84} className="text-blue-600 drop-shadow-lg" /></div>
+            <div className="absolute bottom-2 right-2 z-20 bg-blue-50 p-4 rounded-3xl backdrop-blur-md transform rotate-12 border border-blue-100 shadow-xl transition-all duration-700 hover:rotate-45 hover:-translate-y-2"><Pencil size={44} className="text-blue-500 drop-shadow-md" /></div>
           </div>
-          
-          <button 
-            onClick={() => setIsEntered(true)} 
-            className="group bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-10 py-4 rounded-full font-bold text-lg hover:shadow-[0_8px_30px_rgb(59,130,246,0.3)] transition-all duration-300 hover:-translate-y-1 flex items-center gap-3 mt-4"
-          >
-            Masuk
-            <ChevronRight className="group-hover:translate-x-1 transition-transform" />
+          <button onClick={() => setIsEntered(true)} className="group bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-10 py-4 rounded-full font-bold text-lg hover:shadow-[0_8px_30px_rgb(59,130,246,0.3)] transition-all duration-300 hover:-translate-y-1 flex items-center gap-3 mt-4">
+            Masuk <ChevronRight className="group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
       </div>
     );
   }
 
-  // ================= APLIKASI UTAMA =================
   return (
     <>
       <style>{`
-        /* Smooth bezier animations */
         @keyframes animSlideLeft { 0% { opacity: 0; transform: translateX(-40px); } 100% { opacity: 1; transform: translateX(0); } }
         @keyframes animSlideRight { 0% { opacity: 0; transform: translateX(40px); } 100% { opacity: 1; transform: translateX(0); } }
         @keyframes animSlideUp { 0% { opacity: 0; transform: translateY(40px); } 100% { opacity: 1; transform: translateY(0); } }
@@ -548,7 +667,6 @@ export default function App() {
         .anim-fade-up { animation: animSlideUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .anim-fade-right { animation: animSlideRight 1s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         
-        /* Custom Scrollbar for elegance */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
@@ -563,7 +681,7 @@ export default function App() {
             <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center text-white shadow-md">
               <Briefcase size={16} />
             </div>
-            Rekap Digital
+            Monitoring Anggaran
           </div>
           <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 bg-slate-100 rounded-xl text-slate-600 hover:bg-slate-200 transition-colors">
             {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
@@ -577,13 +695,12 @@ export default function App() {
               <Briefcase size={22} strokeWidth={2.5} />
             </div>
             <div>
-              <h1 className="font-extrabold text-slate-800 tracking-tight text-lg">Rekap Digital</h1>
+              <h1 className="font-extrabold text-slate-800 tracking-tight text-lg">Monitoring Anggaran</h1>
               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">Bidang Aptika</p>
             </div>
           </div>
           
           <div className="p-4 space-y-1.5 flex-1 overflow-y-auto">
-            {/* FITUR PEMILIH TAHUN */}
             <div className="px-2 mb-8 mt-2">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block flex items-center gap-1.5">
                 <Calendar size={12}/> Tahun Anggaran
@@ -601,7 +718,6 @@ export default function App() {
             <NavItem id="mamin" icon={Utensils} label="Makan Minum" />
             <NavItem id="perdin" icon={Plane} label="Perjalanan Dinas" />
             
-            {/* MENU DINAMIS DENGAN IKON CERDAS */}
             {dynamicCategories.length > 0 && <div className="pt-2"></div>}
             {dynamicCategories.map(cat => (
               <NavItem key={cat} id={`dynamic_${cat}`} icon={getCategoryIcon(cat)} label={cat} />
@@ -621,7 +737,6 @@ export default function App() {
         {/* Main Content Area */}
         <div className="flex-1 p-4 md:p-8 lg:p-10 overflow-y-auto w-full max-w-[1600px] mx-auto">
           
-          {/* Header Title */}
           <div className="mb-8 md:mb-10 anim-fade-up">
             <h2 className="text-3xl font-extrabold text-slate-800 capitalize flex items-center gap-3 tracking-tight">
               {activeTab === 'dashboard' && 'Dashboard Ringkasan'}
@@ -637,87 +752,117 @@ export default function App() {
           {activeTab === 'dashboard' && (
             <div className="space-y-10 anim-fade-up">
               
-              {/* Global Cards */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-                
-                {/* Mamin Global Card */}
-                <div className="bg-white rounded-3xl p-7 md:p-8 border border-slate-100/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden group hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow duration-500">
-                  <div className="absolute -right-10 -top-10 w-40 h-40 bg-blue-50 rounded-full blur-3xl group-hover:bg-blue-100 transition-colors duration-500"></div>
-                  <h3 className="font-extrabold text-xl text-slate-800 mb-6 flex items-center gap-3 relative z-10">
-                    <div className="p-3 bg-blue-100 rounded-2xl text-blue-600"><Utensils size={24} /></div> Makan Minum (Global)
+              {/* --- EARLY WARNING SYSTEM VISUAL --- */}
+              {dashboardAlerts.length > 0 && (
+                <div className="bg-red-50/80 border border-red-100 rounded-3xl p-6 shadow-sm relative overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
+                  <div className="absolute -right-10 -top-10 w-40 h-40 bg-red-200/50 rounded-full blur-3xl"></div>
+                  <h3 className="font-black text-red-700 text-lg mb-4 flex items-center gap-2 relative z-10">
+                    <AlertTriangle size={22} strokeWidth={2.5} className="animate-pulse"/> Peringatan Dini Anggaran (Kritis)
                   </h3>
-                  <div className="w-full space-y-4 text-sm font-medium relative z-10">
-                    <div className="flex justify-between border-b border-slate-100 pb-3"><span className="text-slate-500">Pagu Total Keseluruhan</span><span className="font-bold text-slate-700 text-base"><AnimatedNominal value={totalPaguMaminKeseluruhan} /></span></div>
-                    <div className="flex justify-between border-b border-slate-100 pb-3"><span className="text-slate-500">Total Realisasi Digunakan</span><span className="font-bold text-red-500 text-base"><AnimatedNominal value={totalRealisasiMaminKeseluruhan} /></span></div>
-                    <div className="flex justify-between items-center pt-2 min-w-0">
-                      <span className="font-extrabold text-slate-700 text-base uppercase tracking-wider text-[11px] mr-2">Sisa Anggaran</span>
-                      <span className={`font-black text-2xl truncate ${sisaMaminKeseluruhan < 0 ? 'text-red-500' : 'text-blue-600 text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600'}`} title={formatRp(sisaMaminKeseluruhan)}>
-                        <AnimatedNominal value={sisaMaminKeseluruhan} />
-                      </span>
-                    </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
+                    {dashboardAlerts.map((alert, idx) => (
+                      <div key={idx} className="bg-white rounded-2xl p-4 border border-red-100/50 shadow-sm flex flex-col hover:border-red-300 transition-colors">
+                        <span className="font-extrabold text-slate-700 text-sm">{alert.kategori} <span className="font-medium text-xs text-slate-500">({alert.sub})</span></span>
+                        <div className="flex justify-between items-end mt-2">
+                           <span className="text-xs font-bold text-red-500 flex items-center gap-1"><AlertCircle size={12}/> Terpakai: {alert.percent.toFixed(1)}%</span>
+                           <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Sisa: <span className="text-red-600">{formatRp(alert.sisa)}</span></span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
+              )}
 
-                {/* Perdin Global Card */}
-                <div className="bg-white rounded-3xl p-7 md:p-8 border border-slate-100/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden group hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow duration-500 flex flex-col">
-                  <div className="absolute -right-10 -top-10 w-40 h-40 bg-indigo-50 rounded-full blur-3xl group-hover:bg-indigo-100 transition-colors duration-500"></div>
-                  <div className="flex justify-between items-center mb-6 relative z-10">
-                    <h3 className="font-extrabold text-xl text-slate-800 flex items-center gap-3">
-                      <div className="p-3 bg-indigo-100 rounded-2xl text-indigo-600"><Plane size={24} /></div> Perjalanan Dinas (Global)
-                    </h3>
-                    <button onClick={() => { setIsEditingDiscount(true); setPerdinDiscountPct(savedPerdinDiscount > 0 ? savedPerdinDiscount : ''); }} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-transparent hover:border-indigo-100" title="Pemotongan Sisa Anggaran">
-                      <Scissors size={18} strokeWidth={2.5} />
-                    </button>
-                  </div>
-
-                  <div className="w-full text-sm font-medium relative z-10 flex flex-col flex-1">
-                    <div className="space-y-4">
-                      <div className="flex justify-between border-b border-slate-100 pb-3"><span className="text-slate-500">Pagu Total Keseluruhan</span><span className="font-bold text-slate-700 text-base"><AnimatedNominal value={totalPaguPerdinKeseluruhan} /></span></div>
-                      <div className="flex justify-between border-b border-slate-100 pb-3"><span className="text-slate-500">Total Realisasi Digunakan</span><span className="font-bold text-red-500 text-base"><AnimatedNominal value={totalRealisasiPerdinKeseluruhan} /></span></div>
-                    </div>
-
-                    <div className="pt-4 mt-auto min-w-0">
-                      {isEditingDiscount ? (
-                        <div className="flex items-center justify-between gap-2 bg-indigo-50 p-2.5 rounded-xl border border-indigo-100 animate-in fade-in zoom-in duration-200">
-                           <span className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider ml-1">Potongan:</span>
-                           <div className="flex items-center gap-1">
-                             <input type="number" value={perdinDiscountPct} onChange={e => setPerdinDiscountPct(e.target.value)} className="w-16 p-1.5 text-sm font-bold text-center border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white" placeholder="%" />
-                             <span className="text-sm font-bold text-indigo-800 mr-2">%</span>
-                             <button onClick={handleSaveDiscount} className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm transition-colors"><Check size={16} strokeWidth={3} /></button>
-                             <button onClick={() => setIsEditingDiscount(false)} className="p-1.5 bg-white text-slate-600 rounded-lg hover:bg-slate-100 shadow-sm transition-colors border border-slate-200"><X size={16} strokeWidth={3} /></button>
-                           </div>
-                        </div>
-                      ) : savedPerdinDiscount > 0 ? (
-                        <div className="flex flex-col gap-2 animate-in fade-in duration-300">
-                          <div className="flex justify-between items-center px-1">
-                            <span className="font-bold text-slate-400 text-[10px] uppercase tracking-wider line-through">Sisa Awal</span>
-                            <span className="font-bold text-slate-400 text-sm line-through"><AnimatedNominal value={sisaPerdinKeseluruhan} /></span>
-                          </div>
-                          <div className="flex justify-between items-center bg-indigo-50/80 p-3 rounded-2xl border border-indigo-100 shadow-sm">
-                            <div className="flex flex-col">
-                               <span className="font-extrabold text-indigo-800 text-[11px] uppercase tracking-wider">Sisa Anggaran</span>
-                               <span className="text-[9px] font-bold text-indigo-500 mt-0.5 flex items-center gap-1 bg-white w-fit px-1.5 py-0.5 rounded-md border border-indigo-100"><Scissors size={10}/> Dipotong {savedPerdinDiscount}%</span>
-                            </div>
-                            <span className={`font-black text-2xl truncate ${sisaPerdinKeseluruhan < 0 ? 'text-red-500' : 'text-indigo-700'}`}>
-                              <AnimatedNominal value={sisaPerdinKeseluruhan - (sisaPerdinKeseluruhan * (savedPerdinDiscount / 100))} />
-                            </span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex justify-between items-center mt-2 animate-in fade-in duration-300">
-                          <span className="font-extrabold text-slate-700 text-base uppercase tracking-wider text-[11px] mr-2">Sisa Anggaran</span>
-                          <span className={`font-black text-2xl truncate ${sisaPerdinKeseluruhan < 0 ? 'text-red-500' : 'text-indigo-600 text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600'}`} title={formatRp(sisaPerdinKeseluruhan)}>
-                            <AnimatedNominal value={sisaPerdinKeseluruhan} />
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+              {/* Global Cards with Hide/Show Toggle */}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-slate-800 text-lg">Ringkasan Global</h3>
+                <button onClick={toggleGlobalCards} className="flex items-center gap-2 text-sm font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors">
+                  {showGlobalCards ? <><EyeOff size={16} /> Sembunyikan</> : <><Eye size={16} /> Tampilkan</>}
+                </button>
               </div>
 
-              {/* Rincian per Sub Kegiatan */}
-              <div className="flex items-center gap-4 mb-6">
+              {showGlobalCards && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 animate-in fade-in zoom-in duration-300">
+                  {/* Mamin Global Card */}
+                  <div className="bg-white rounded-3xl p-7 md:p-8 border border-slate-100/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden group hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow duration-500 flex flex-col">
+                    <div className="absolute -right-10 -top-10 w-40 h-40 bg-blue-50 rounded-full blur-3xl group-hover:bg-blue-100 transition-colors duration-500"></div>
+                    <h3 className="font-extrabold text-xl text-slate-800 mb-6 flex items-center gap-3 relative z-10">
+                      <div className="p-3 bg-blue-100 rounded-2xl text-blue-600"><Utensils size={24} /></div> Makan Minum (Global)
+                    </h3>
+                    <div className="w-full space-y-4 text-sm font-medium relative z-10 flex-1 flex flex-col">
+                      <div className="flex justify-between border-b border-slate-100 pb-3"><span className="text-slate-500">Pagu Total Keseluruhan</span><span className="font-bold text-slate-700 text-base"><AnimatedNominal value={totalPaguMaminKeseluruhan} /></span></div>
+                      <div className="flex justify-between border-b border-slate-100 pb-3"><span className="text-slate-500">Total Realisasi Digunakan</span><span className="font-bold text-red-500 text-base"><AnimatedNominal value={totalRealisasiMaminKeseluruhan} /></span></div>
+                      <div className="flex justify-between items-center pt-2 min-w-0 mt-auto">
+                        <span className="font-extrabold text-slate-700 text-base uppercase tracking-wider text-[11px] mr-2">Sisa Anggaran</span>
+                        <span className={`font-black text-2xl truncate ${sisaMaminKeseluruhan < 0 ? 'text-red-500' : 'text-blue-600 text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600'}`} title={formatRp(sisaMaminKeseluruhan)}>
+                          <AnimatedNominal value={sisaMaminKeseluruhan} />
+                        </span>
+                      </div>
+                      <ProgressBar realisasi={totalRealisasiMaminKeseluruhan} pagu={totalPaguMaminKeseluruhan} />
+                    </div>
+                  </div>
+
+                  {/* Perdin Global Card */}
+                  <div className="bg-white rounded-3xl p-7 md:p-8 border border-slate-100/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden group hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow duration-500 flex flex-col">
+                    <div className="absolute -right-10 -top-10 w-40 h-40 bg-indigo-50 rounded-full blur-3xl group-hover:bg-indigo-100 transition-colors duration-500"></div>
+                    <div className="flex justify-between items-center mb-6 relative z-10">
+                      <h3 className="font-extrabold text-xl text-slate-800 flex items-center gap-3">
+                        <div className="p-3 bg-indigo-100 rounded-2xl text-indigo-600"><Plane size={24} /></div> Perjalanan Dinas (Global)
+                      </h3>
+                      <button onClick={() => { setIsEditingDiscount(true); setPerdinDiscountPct(savedPerdinDiscount > 0 ? savedPerdinDiscount : ''); }} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-transparent hover:border-indigo-100" title="Pemotongan Sisa Anggaran">
+                        <Scissors size={18} strokeWidth={2.5} />
+                      </button>
+                    </div>
+
+                    <div className="w-full text-sm font-medium relative z-10 flex flex-col flex-1">
+                      <div className="space-y-4">
+                        <div className="flex justify-between border-b border-slate-100 pb-3"><span className="text-slate-500">Pagu Total Keseluruhan</span><span className="font-bold text-slate-700 text-base"><AnimatedNominal value={totalPaguPerdinKeseluruhan} /></span></div>
+                        <div className="flex justify-between border-b border-slate-100 pb-3"><span className="text-slate-500">Total Realisasi Digunakan</span><span className="font-bold text-red-500 text-base"><AnimatedNominal value={totalRealisasiPerdinKeseluruhan} /></span></div>
+                      </div>
+
+                      <div className="pt-4 mt-auto min-w-0">
+                        {isEditingDiscount ? (
+                          <div className="flex items-center justify-between gap-2 bg-indigo-50 p-2.5 rounded-xl border border-indigo-100 animate-in fade-in zoom-in duration-200">
+                            <span className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider ml-1">Potongan:</span>
+                            <div className="flex items-center gap-1">
+                              <input type="number" value={perdinDiscountPct} onChange={e => setPerdinDiscountPct(e.target.value)} className="w-16 p-1.5 text-sm font-bold text-center border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white" placeholder="%" />
+                              <span className="text-sm font-bold text-indigo-800 mr-2">%</span>
+                              <button onClick={handleSaveDiscount} className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm transition-colors"><Check size={16} strokeWidth={3} /></button>
+                              <button onClick={() => setIsEditingDiscount(false)} className="p-1.5 bg-white text-slate-600 rounded-lg hover:bg-slate-100 shadow-sm transition-colors border border-slate-200"><X size={16} strokeWidth={3} /></button>
+                            </div>
+                          </div>
+                        ) : savedPerdinDiscount > 0 ? (
+                          <div className="flex flex-col gap-2 animate-in fade-in duration-300">
+                            <div className="flex justify-between items-center px-1 mb-1">
+                              <span className="font-bold text-slate-400 text-[10px] uppercase tracking-wider line-through">Sisa Awal</span>
+                              <span className="font-bold text-slate-400 text-sm line-through"><AnimatedNominal value={sisaPerdinKeseluruhan} /></span>
+                            </div>
+                            <div className="flex justify-between items-center bg-indigo-50/80 p-3 rounded-2xl border border-indigo-100 shadow-sm">
+                              <div className="flex flex-col">
+                                <span className="font-extrabold text-indigo-800 text-[11px] uppercase tracking-wider">Sisa Anggaran</span>
+                                <span className="text-[9px] font-bold text-indigo-500 mt-0.5 flex items-center gap-1 bg-white w-fit px-1.5 py-0.5 rounded-md border border-indigo-100"><Scissors size={10}/> Dipotong {savedPerdinDiscount}%</span>
+                              </div>
+                              <span className={`font-black text-2xl truncate ${sisaPerdinKeseluruhan < 0 ? 'text-red-500' : 'text-indigo-700'}`}>
+                                <AnimatedNominal value={sisaPerdinKeseluruhan - (sisaPerdinKeseluruhan * (savedPerdinDiscount / 100))} />
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between items-center mt-2 animate-in fade-in duration-300">
+                            <span className="font-extrabold text-slate-700 text-base uppercase tracking-wider text-[11px] mr-2">Sisa Anggaran</span>
+                            <span className={`font-black text-2xl truncate ${sisaPerdinKeseluruhan < 0 ? 'text-red-500' : 'text-indigo-600 text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600'}`} title={formatRp(sisaPerdinKeseluruhan)}>
+                              <AnimatedNominal value={sisaPerdinKeseluruhan} />
+                            </span>
+                          </div>
+                        )}
+                        <ProgressBar realisasi={totalRealisasiPerdinKeseluruhan} pagu={totalPaguPerdinKeseluruhan} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-4 mb-6 mt-8">
                 <div className="h-px bg-slate-200 flex-1"></div>
                 <span className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Rincian Komprehensif Sub Kegiatan</span>
                 <div className="h-px bg-slate-200 flex-1"></div>
@@ -741,13 +886,12 @@ export default function App() {
                             const pagu = parseRibuan(kategori.nominal);
                             const isPerdin = kategori.nama.toLowerCase().includes('perjalanan dinas') || kategori.nama.toLowerCase().includes('perdin');
                             
-                            // Kalkulasi Pintar Realisasi
                             const realisasi = isPerdin 
-                              ? currentPerdin
+                              ? validPerdin
                                   .filter(item => item.sub_kegiatan === sub.nama_sub)
                                   .reduce((sum, item) => sum + getPerdinTotal(item), 0)
                               : currentMamin
-                                  .filter(item => item.sub_kegiatan === sub.nama_sub && item.kategori_belanja === kategori.nama)
+                                  .filter(item => item.sub_kegiatan === sub.nama_sub && (item.kategori_belanja || 'Makan Minum Rapat') === kategori.nama)
                                   .reduce((sum, item) => sum + (parseFloat(item.realisasi_anggaran) || 0), 0);
                             
                             const sisa = pagu - realisasi;
@@ -759,7 +903,7 @@ export default function App() {
                                   <div className="p-2 bg-white rounded-xl shadow-sm border border-slate-100 text-slate-500"><IconKat size={16} strokeWidth={2.5}/></div>
                                   <div className="text-sm font-bold text-slate-700 uppercase tracking-wide truncate" title={kategori.nama}>{kategori.nama}</div>
                                 </div>
-                                <div className="grid grid-cols-3 gap-2 text-xs md:text-sm">
+                                <div className="grid grid-cols-3 gap-2 text-xs md:text-sm mb-1">
                                   <div>
                                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Pagu</div>
                                     <div className="font-bold text-slate-700"><AnimatedNominal value={pagu} /></div>
@@ -775,6 +919,7 @@ export default function App() {
                                     </div>
                                   </div>
                                 </div>
+                                <ProgressBar realisasi={realisasi} pagu={pagu} />
                               </div>
                             )
                           })}
@@ -793,7 +938,6 @@ export default function App() {
             const filteredHistory = currentMamin.filter(m => m.kategori_belanja === catName);
             const subOptions = currentSub.filter(sub => parseKategori(sub).some(k => k.nama === catName));
 
-            // Kalkulasi realisasi total khusus untuk sub kegiatan yang dipilih
             let realisasiTotalDynamic = 0;
             if (formDynamic.sub_kegiatan) {
                 realisasiTotalDynamic = currentMamin
@@ -1086,11 +1230,11 @@ export default function App() {
                       </div>
                       <div>
                         <label className="block text-[11px] font-extrabold text-slate-500 mb-2 uppercase tracking-widest flex justify-between">Pagu Total Mamin <span className="text-[10px] text-blue-500 font-bold">(Auto)</span></label>
-                        <input type="text" name="pagu_mamin" value={formMamin.pagu_mamin || ''} onChange={handleInputMamin} required className="w-full p-3.5 text-sm bg-blue-50/50 border border-blue-100 text-blue-800 font-bold rounded-2xl outline-none cursor-not-allowed" placeholder="Rp Anggaran" />
+                        <input type="text" name="pagu_mamin" value={formMamin.pagu_mamin || ''} readOnly className="w-full p-3.5 text-sm bg-blue-50/50 border border-blue-100 text-blue-800 font-bold rounded-2xl outline-none cursor-not-allowed" placeholder="Rp Anggaran" />
                       </div>
                       <div>
                         <label className="block text-[11px] font-extrabold text-slate-500 mb-2 uppercase tracking-widest flex justify-between">Pagu Bulanan <span className="text-[10px] text-blue-500 font-bold">(Auto)</span></label>
-                        <input type="text" name="pagu_bulanan" value={formMamin.pagu_bulanan || ''} onChange={handleInputMamin} required className="w-full p-3.5 text-sm bg-slate-50 border border-slate-200 rounded-2xl outline-none cursor-not-allowed font-semibold text-slate-600" placeholder="Rp Pagu Rapat" />
+                        <input type="text" name="pagu_bulanan" value={formMamin.pagu_bulanan || ''} readOnly className="w-full p-3.5 text-sm bg-slate-50 border border-slate-200 rounded-2xl outline-none cursor-not-allowed font-semibold text-slate-600" placeholder="Rp Pagu Rapat" />
                       </div>
                       <div className="sm:col-span-2">
                         <label className="block text-[11px] font-extrabold text-slate-500 mb-2 uppercase tracking-widest">Nama Rapat</label>
@@ -1145,12 +1289,12 @@ export default function App() {
                 </div>
               </div>
               
-              {/* KANAN: TABEL RIWAYAT MAMIN */}
+              {/* KANAN: TABEL RIWAYAT MAMIN (PENGELOMPOKAN SUB KEGIATAN) */}
               <div className="lg:col-span-7 2xl:col-span-8 flex flex-col h-full anim-fade-right">
                 <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden flex flex-col h-full">
                   <div className="p-6 md:p-8 border-b border-slate-100/50 flex justify-between items-center bg-slate-50/30">
                     <h3 className="font-extrabold text-slate-800 text-lg flex items-center gap-3"><Clock className="text-slate-400" size={22} strokeWidth={2.5}/> Riwayat Rapat</h3>
-                    <button onClick={() => fetchData(true)} disabled={isRefreshing} className="text-blue-600 text-xs font-extrabold uppercase tracking-wider hover:bg-blue-50 px-4 py-2 rounded-xl flex items-center gap-2 disabled:opacity-50 transition-all border border-transparent hover:border-blue-100">
+                    <button onClick={() => fetchData(true)} disabled={isRefreshing} className="text-indigo-600 text-xs font-extrabold uppercase tracking-wider hover:bg-blue-50 px-4 py-2 rounded-xl flex items-center gap-2 disabled:opacity-50 transition-all border border-transparent hover:border-blue-100">
                       <RefreshCw size={14} strokeWidth={2.5} className={isRefreshing ? 'animate-spin' : ''} /> {isRefreshing ? 'Memuat...' : 'Refresh'}
                     </button>
                   </div>
@@ -1158,105 +1302,160 @@ export default function App() {
                     <table className="w-full text-left border-collapse">
                       <thead className="bg-slate-50/80 text-slate-400 text-[10px] uppercase tracking-widest font-black">
                         <tr>
-                          <th className="p-5 font-bold border-b border-slate-100">Informasi Rapat</th>
+                          <th className="p-5 font-bold border-b border-slate-100">Informasi Sub Kegiatan / Rapat</th>
                           <th className="p-5 text-center font-bold w-20 md:w-28 border-b border-slate-100">Qty</th>
-                          <th className="p-5 text-right font-bold w-28 md:w-40 border-b border-slate-100">Realisasi (Rp)</th>
+                          <th className="p-5 text-right font-bold w-32 md:w-40 border-b border-slate-100">Realisasi (Rp)</th>
                           <th className="p-5 text-center font-bold w-20 md:w-24 border-b border-slate-100">Aksi</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {currentMamin.filter(m => (m.kategori_belanja || '').toLowerCase().includes('makan minum') || (m.kategori_belanja || '').toLowerCase().includes('mamin')).length === 0 ? (
-                          <tr><td colSpan="4" className="text-center p-12 text-slate-400 font-medium">Belum ada riwayat Rapat untuk tahun {selectedYear}.</td></tr>
-                        ) : (
-                          currentMamin.filter(m => (m.kategori_belanja || '').toLowerCase().includes('makan minum') || (m.kategori_belanja || '').toLowerCase().includes('mamin')).map((item, index) => {
-                            const isExpanded = expandedRow === item.id;
-                            let detailManual = null, subTotal = 0, dppn = 0;
-                            const totalRealisasi = parseFloat(item.realisasi_anggaran) || 0;
+                        {(() => {
+                          const maminHistoryList = currentMamin.filter(m => (m.kategori_belanja || 'Makan Minum Rapat').toLowerCase().includes('makan minum') || (m.kategori_belanja || 'Makan Minum Rapat').toLowerCase().includes('mamin'));
+                          
+                          if (maminHistoryList.length === 0) {
+                            return <tr><td colSpan="4" className="text-center p-12 text-slate-400 font-medium">Belum ada riwayat Rapat untuk tahun {selectedYear}.</td></tr>;
+                          }
 
-                            if (String(item.jumlah_paket).includes('Nasi:')) {
-                              const match = String(item.jumlah_paket).match(/Nasi:\s*(\d+)\s*\(@\s*(\d+)\)\s*\|\s*Snack:\s*(\d+)\s*\(@\s*(\d+)\)/);
-                              if (match) {
-                                const qNasi = parseInt(match[1]), hNasi = parseInt(match[2]), qSnack = parseInt(match[3]), hSnack = parseInt(match[4]);
-                                subTotal = (qNasi * hNasi) + (qSnack * hSnack);
-                                dppn = subTotal * 0.10;
-                                detailManual = { qNasi, hNasi, totNasi: qNasi*hNasi, qSnack, hSnack, totSnack: qSnack*hSnack };
-                              }
-                            } else {
-                              subTotal = parseRibuan(item.jumlah_paket) * 61700;
-                              dppn = subTotal * 0.10;
-                            }
+                          // LOGIKA PENGELOMPOKAN BERDASARKAN SUB KEGIATAN
+                          const groupedMamin = {};
+                          maminHistoryList.forEach(item => {
+                             const sub = item.sub_kegiatan || 'Tanpa Sub Kegiatan';
+                             if (!groupedMamin[sub]) {
+                                 groupedMamin[sub] = { sub_kegiatan: sub, total_realisasi: 0, items: [] };
+                             }
+                             groupedMamin[sub].total_realisasi += parseFloat(item.realisasi_anggaran) || 0;
+                             groupedMamin[sub].items.push(item);
+                          });
+                          const groupedMaminArray = Object.values(groupedMamin);
+
+                          return groupedMaminArray.map((group, gIdx) => {
+                            const isSubExpanded = expandedSub === group.sub_kegiatan;
+                            
+                            // Ambil Pagu & Sisa untuk Header Sub Kegiatan
+                            const subData = currentSub.find(s => s.nama_sub === group.sub_kegiatan);
+                            const paguSub = subData ? getPaguKategori(subData, 'mamin') : 0;
+                            const sisaSub = paguSub - group.total_realisasi;
 
                             return (
-                              <React.Fragment key={index}>
-                                <tr onClick={() => toggleRow(item.id)} className={`hover:bg-slate-50/80 transition-colors cursor-pointer group ${isExpanded ? 'bg-blue-50/30' : ''}`}>
-                                  <td className="p-5 align-top">
-                                    <div className="flex items-start gap-4">
-                                      <div className={`mt-1 p-1 rounded-md transition-colors ${isExpanded ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500'}`}>
-                                          <ChevronDown size={14} strokeWidth={3} className={`transform transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                              <React.Fragment key={`group-${gIdx}`}>
+                                
+                                {/* BARIS LEVEL 1: HEADER SUB KEGIATAN */}
+                                <tr onClick={() => setExpandedSub(prev => prev === group.sub_kegiatan ? null : group.sub_kegiatan)} className={`transition-all duration-300 cursor-pointer group border-b border-slate-200 ${isSubExpanded ? 'bg-indigo-50/80 shadow-sm' : 'bg-slate-100 hover:bg-slate-200/70'}`}>
+                                  <td className="p-4 align-middle" colSpan="2">
+                                    <div className="flex items-center gap-3">
+                                      <div className={`p-1.5 rounded-lg transition-all shadow-sm border ${isSubExpanded ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-slate-500 border-slate-200 group-hover:border-indigo-300 group-hover:text-indigo-600'}`}>
+                                          <ChevronDown size={16} strokeWidth={3} className={`transform transition-transform duration-300 ${isSubExpanded ? 'rotate-180' : ''}`} />
                                       </div>
-                                      <div className="min-w-0 flex-1">
-                                        <div className="font-extrabold text-slate-700 text-sm md:text-base leading-snug break-words group-hover:text-blue-600 transition-colors">{item.nama_rapat}</div>
-                                        <div className="text-xs flex flex-wrap gap-2 items-center text-slate-500 mt-2">
-                                          <span className="bg-white border border-slate-200 shadow-sm px-2.5 py-1 rounded-lg text-[10px] uppercase font-bold text-slate-600 whitespace-nowrap">{String(item.tanggal_rapat).substring(0, 10)}</span>
-                                          <span className="leading-tight font-medium text-slate-500 break-words">{item.sub_kegiatan}</span>
+                                      <div>
+                                        <div className="font-extrabold text-slate-800 text-sm md:text-base">{group.sub_kegiatan}</div>
+                                        <div className="text-[10px] font-bold text-slate-500 mt-1.5 flex gap-2">
+                                          <span className="bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-sm flex items-center gap-1"><Wallet size={10}/> Pagu: {formatRp(paguSub)}</span>
+                                          <span className={`border px-2 py-0.5 rounded-md shadow-sm flex items-center gap-1 ${sisaSub < 0 ? 'bg-red-50 text-red-600 border-red-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}><AlertCircle size={10}/> Sisa: {formatRp(sisaSub)}</span>
                                         </div>
                                       </div>
                                     </div>
                                   </td>
-                                  <td className="p-5 text-center font-black text-slate-600 align-top">
-                                    {detailManual ? (
-                                      <div className="text-[10px] leading-tight flex flex-col gap-1.5 items-center">
-                                        <span className="bg-amber-50 text-amber-700 border border-amber-100 px-2 py-1 rounded-md whitespace-nowrap shadow-sm">Nasi: {detailManual.qNasi}</span>
-                                        <span className="bg-amber-50 text-amber-700 border border-amber-100 px-2 py-1 rounded-md whitespace-nowrap shadow-sm">Snack: {detailManual.qSnack}</span>
-                                      </div>
-                                    ) : ( <span className="text-sm md:text-base bg-white border border-slate-200 shadow-sm px-3.5 py-1.5 rounded-xl whitespace-nowrap">{formatRibuan(item.jumlah_paket)}</span> )}
+                                  <td className="p-4 text-right font-black text-indigo-700 text-sm md:text-base align-middle">
+                                    <AnimatedNominal value={group.total_realisasi} />
+                                    <div className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{group.items.length} Rapat Tersimpan</div>
                                   </td>
-                                  <td className="p-5 text-right font-black text-blue-600 text-sm md:text-base whitespace-nowrap align-top"><AnimatedNominal value={item.realisasi_anggaran} /></td>
-                                  <td className="p-5 align-top">
-                                    <div className="flex justify-center gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
-                                      <button onClick={(e) => { e.stopPropagation(); editData(item, 'Sheet1'); }} className="p-2 text-yellow-600 bg-yellow-50 rounded-xl hover:bg-yellow-100 hover:shadow-sm transition-all"><Edit size={16} strokeWidth={2.5}/></button>
-                                      <button onClick={(e) => { e.stopPropagation(); triggerDelete(item.id, item.nama_rapat, 'Sheet1'); }} className="p-2 text-red-500 bg-red-50 rounded-xl hover:bg-red-100 hover:shadow-sm transition-all"><Trash2 size={16} strokeWidth={2.5}/></button>
-                                    </div>
-                                  </td>
+                                  <td className="p-4 align-middle text-center text-slate-300 group-hover:text-indigo-400"><Layers size={20} strokeWidth={2}/></td>
                                 </tr>
-                                {isExpanded && (
-                                  <tr>
-                                    <td colSpan="4" className="p-0 border-b border-slate-100 bg-slate-50/30">
-                                      <div className="overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
-                                        <div className="m-5 mt-2 border border-blue-100/50 rounded-2xl bg-white p-5 md:p-6 shadow-sm">
-                                          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                                            <div>
-                                              <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-4 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> Informasi Rapat</h4>
-                                              <div className="space-y-3.5 text-sm text-slate-600 font-medium">
-                                                <div className="flex justify-between items-start gap-4 border-b border-slate-50 pb-2"><span className="text-slate-400 shrink-0">Sub Kegiatan:</span> <span className="font-bold text-slate-800 text-right break-words">{item.sub_kegiatan}</span></div>
-                                                <div className="flex justify-between items-start gap-4 border-b border-slate-50 pb-2"><span className="text-slate-400 shrink-0">Nama Rapat:</span> <span className="font-bold text-slate-800 text-right break-words">{item.nama_rapat}</span></div>
-                                                <div className="flex justify-between items-start gap-4"><span className="text-slate-400 shrink-0">Tanggal:</span> <span className="font-bold text-slate-800 text-right whitespace-nowrap">{String(item.tanggal_rapat).substring(0, 10)}</span></div>
-                                              </div>
+
+                                {/* BARIS LEVEL 2: DAFTAR RAPAT */}
+                                {isSubExpanded && group.items.map((item) => {
+                                  const isExpanded = expandedRow === item.id;
+                                  let detailManual = null, subTotal = 0, dppn = 0;
+                                  const totalRealisasi = parseFloat(item.realisasi_anggaran) || 0;
+
+                                  if (String(item.jumlah_paket).includes('Nasi:')) {
+                                    const match = String(item.jumlah_paket).match(/Nasi:\s*(\d+)\s*\(@\s*(\d+)\)\s*\|\s*Snack:\s*(\d+)\s*\(@\s*(\d+)\)/);
+                                    if (match) {
+                                      const qNasi = parseInt(match[1]), hNasi = parseInt(match[2]), qSnack = parseInt(match[3]), hSnack = parseInt(match[4]);
+                                      subTotal = (qNasi * hNasi) + (qSnack * hSnack);
+                                      dppn = subTotal * 0.10;
+                                      detailManual = { qNasi, hNasi, totNasi: qNasi*hNasi, qSnack, hSnack, totSnack: qSnack*hSnack };
+                                    }
+                                  } else {
+                                    subTotal = parseRibuan(item.jumlah_paket) * 61700;
+                                    dppn = subTotal * 0.10;
+                                  }
+
+                                  return (
+                                    <React.Fragment key={item.id}>
+                                      <tr onClick={() => toggleRow(item.id)} className={`transition-all duration-300 cursor-pointer group bg-white border-b border-slate-50 border-l-[6px] ${isExpanded ? 'border-l-blue-500 bg-blue-50/50 shadow-inner' : 'border-l-slate-200 hover:border-l-blue-400 hover:bg-slate-50/80'}`}>
+                                        <td className="p-4 pl-6 align-top">
+                                          <div className="flex items-start gap-4">
+                                            <div className={`mt-1 p-1 rounded-md transition-colors ${isExpanded ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500'}`}>
+                                                <ChevronDown size={14} strokeWidth={3} className={`transform transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
                                             </div>
-                                            <div>
-                                              <h4 className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-4 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div> Rincian Kalkulasi</h4>
-                                              <div className="space-y-3 text-sm text-slate-600 font-medium bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                                {detailManual ? (
-                                                  <>
-                                                    <div className="flex justify-between"><span className="text-slate-500 shrink-0 mr-2">{detailManual.qNasi} Nasi (@ {formatRibuan(detailManual.hNasi)})</span> <span className="font-bold text-slate-800 whitespace-nowrap"><AnimatedNominal value={detailManual.totNasi} /></span></div>
-                                                    <div className="flex justify-between"><span className="text-slate-500 shrink-0 mr-2">{detailManual.qSnack} Snack (@ {formatRibuan(detailManual.hSnack)})</span> <span className="font-bold text-slate-800 whitespace-nowrap"><AnimatedNominal value={detailManual.totSnack} /></span></div>
-                                                  </>
-                                                ) : ( <div className="flex justify-between"><span className="text-slate-500 shrink-0 mr-2">{formatRibuan(item.jumlah_paket)} Paket (Nasi+Snack)</span> <span className="font-bold text-slate-800 whitespace-nowrap"><AnimatedNominal value={subTotal} /></span></div> )}
-                                                <div className="flex justify-between pt-3 border-t border-slate-200/60"><span className="text-slate-500">Subtotal Harga Nego:</span> <span className="font-bold text-slate-800 whitespace-nowrap"><AnimatedNominal value={subTotal} /></span></div>
-                                                <div className="flex justify-between"><span className="text-slate-500">PPN (10%):</span> <span className="font-bold text-slate-800 whitespace-nowrap"><AnimatedNominal value={dppn} /></span></div>
-                                                <div className="flex justify-between pt-3 mt-1 border-t border-slate-200 min-w-0"><span className="font-black text-blue-900 tracking-wide truncate">Total Realisasi:</span> <span className="font-black text-blue-600 text-lg truncate" title={formatRp(totalRealisasi)}><AnimatedNominal value={totalRealisasi} /></span></div>
+                                            <div className="min-w-0 flex-1">
+                                              <div className="font-extrabold text-slate-700 text-sm md:text-base leading-snug break-words group-hover:text-blue-600 transition-colors">{item.nama_rapat}</div>
+                                              <div className="text-xs flex flex-wrap gap-2 items-center text-slate-500 mt-2">
+                                                <span className="bg-white border border-slate-200 shadow-sm px-2.5 py-1 rounded-lg text-[10px] uppercase font-bold text-slate-600 whitespace-nowrap">{String(item.tanggal_rapat).substring(0, 10)}</span>
                                               </div>
                                             </div>
                                           </div>
-                                        </div>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                )}
+                                        </td>
+                                        <td className="p-4 text-center font-black text-slate-600 align-top">
+                                          {detailManual ? (
+                                            <div className="text-[10px] leading-tight flex flex-col gap-1.5 items-center">
+                                              <span className="bg-amber-50 text-amber-700 border border-amber-100 px-2 py-1 rounded-md whitespace-nowrap shadow-sm">Nasi: {detailManual.qNasi}</span>
+                                              <span className="bg-amber-50 text-amber-700 border border-amber-100 px-2 py-1 rounded-md whitespace-nowrap shadow-sm">Snack: {detailManual.qSnack}</span>
+                                            </div>
+                                          ) : ( <span className="text-sm md:text-base bg-white border border-slate-200 shadow-sm px-3.5 py-1.5 rounded-xl whitespace-nowrap">{formatRibuan(item.jumlah_paket)}</span> )}
+                                        </td>
+                                        <td className="p-4 text-right font-black text-blue-600 text-sm md:text-base whitespace-nowrap align-top"><AnimatedNominal value={item.realisasi_anggaran} /></td>
+                                        <td className="p-4 align-top">
+                                          <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={(e) => { e.stopPropagation(); editData(item, 'Sheet1'); }} className="p-1.5 text-yellow-600 bg-yellow-50 rounded-lg hover:bg-yellow-100 hover:shadow-sm transition-all"><Edit size={14} strokeWidth={2.5}/></button>
+                                            <button onClick={(e) => { e.stopPropagation(); triggerDelete(item.id, item.nama_rapat, 'Sheet1'); }} className="p-1.5 text-red-500 bg-red-50 rounded-lg hover:bg-red-100 hover:shadow-sm transition-all"><Trash2 size={14} strokeWidth={2.5}/></button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                      
+                                      {/* BARIS LEVEL 3: RINCIAN KALKULASI RAPAT */}
+                                      {isExpanded && (
+                                        <tr>
+                                          <td colSpan="4" className="p-0 border-b border-slate-100 bg-slate-50/80 border-l-[6px] border-l-blue-500 shadow-inner">
+                                            <div className="overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
+                                              <div className="m-5 ml-14 mt-2 border border-blue-100/50 rounded-2xl bg-white p-5 md:p-6 shadow-sm">
+                                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                                                  <div>
+                                                    <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-4 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> Informasi Rapat</h4>
+                                                    <div className="space-y-3.5 text-sm text-slate-600 font-medium">
+                                                      <div className="flex justify-between items-start gap-4 border-b border-slate-50 pb-2"><span className="text-slate-400 shrink-0">Sub Kegiatan:</span> <span className="font-bold text-slate-800 text-right break-words">{item.sub_kegiatan}</span></div>
+                                                      <div className="flex justify-between items-start gap-4 border-b border-slate-50 pb-2"><span className="text-slate-400 shrink-0">Nama Rapat:</span> <span className="font-bold text-slate-800 text-right break-words">{item.nama_rapat}</span></div>
+                                                      <div className="flex justify-between items-start gap-4"><span className="text-slate-400 shrink-0">Tanggal:</span> <span className="font-bold text-slate-800 text-right whitespace-nowrap">{String(item.tanggal_rapat).substring(0, 10)}</span></div>
+                                                    </div>
+                                                  </div>
+                                                  <div>
+                                                    <h4 className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-4 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div> Rincian Kalkulasi</h4>
+                                                    <div className="space-y-3 text-sm text-slate-600 font-medium bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                                      {detailManual ? (
+                                                        <>
+                                                          <div className="flex justify-between"><span className="text-slate-500 shrink-0 mr-2">{detailManual.qNasi} Nasi (@ {formatRibuan(detailManual.hNasi)})</span> <span className="font-bold text-slate-800 whitespace-nowrap"><AnimatedNominal value={detailManual.totNasi} /></span></div>
+                                                          <div className="flex justify-between"><span className="text-slate-500 shrink-0 mr-2">{detailManual.qSnack} Snack (@ {formatRibuan(detailManual.hSnack)})</span> <span className="font-bold text-slate-800 whitespace-nowrap"><AnimatedNominal value={detailManual.totSnack} /></span></div>
+                                                        </>
+                                                      ) : ( <div className="flex justify-between"><span className="text-slate-500 shrink-0 mr-2">{formatRibuan(item.jumlah_paket)} Paket (Nasi+Snack)</span> <span className="font-bold text-slate-800 whitespace-nowrap"><AnimatedNominal value={subTotal} /></span></div> )}
+                                                      <div className="flex justify-between pt-3 border-t border-slate-200/60"><span className="text-slate-500">Subtotal Harga Nego:</span> <span className="font-bold text-slate-800 whitespace-nowrap"><AnimatedNominal value={subTotal} /></span></div>
+                                                      <div className="flex justify-between"><span className="text-slate-500">PPN (10%):</span> <span className="font-bold text-slate-800 whitespace-nowrap"><AnimatedNominal value={dppn} /></span></div>
+                                                      <div className="flex justify-between pt-3 mt-1 border-t border-slate-200 min-w-0"><span className="font-black text-blue-900 tracking-wide truncate">Total Realisasi:</span> <span className="font-black text-blue-600 text-lg truncate" title={formatRp(totalRealisasi)}><AnimatedNominal value={totalRealisasi} /></span></div>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </React.Fragment>
+                                  );
+                                })}
                               </React.Fragment>
                             );
-                          })
-                        )}
+                          });
+                        })()}
                       </tbody>
                     </table>
                   </div>
@@ -1269,83 +1468,186 @@ export default function App() {
           {activeTab === 'perdin' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               
-              {/* PANEL KIRI: FORM INPUT PERDIN */}
+              {/* PANEL KIRI: FORM INPUT / PREDIKTOR PERDIN */}
               <div className="lg:col-span-5 2xl:col-span-4 anim-fade-up">
                 <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden sticky top-6">
-                  <div className="p-6 border-b border-slate-100/50 flex justify-between items-center bg-slate-50/50 backdrop-blur-md">
-                    <h2 className="font-extrabold text-slate-800 flex items-center gap-3">
-                      <div className="p-2 bg-indigo-100 text-indigo-600 rounded-xl"><Plane size={20} /></div> {isEditing ? 'Edit Perdin' : 'Input Perdin Baru'}
-                    </h2>
+                  
+                  {/* TOGGLE MODE */}
+                  <div className="p-5 border-b border-slate-100/50 flex justify-between items-center bg-slate-50/50 backdrop-blur-md">
+                     <div className="flex w-full bg-slate-200/50 p-1 rounded-xl">
+                       <button type="button" onClick={() => setPerdinMode('input')} className={`flex-1 px-4 py-2.5 text-[10px] sm:text-xs font-extrabold uppercase tracking-widest rounded-lg transition-all ${perdinMode === 'input' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Input Realisasi</button>
+                       <button type="button" onClick={() => setPerdinMode('predict')} className={`flex-1 px-4 py-2.5 text-[10px] sm:text-xs font-extrabold uppercase tracking-widest rounded-lg transition-all ${perdinMode === 'predict' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Rencana Perjalanan</button>
+                     </div>
                   </div>
                   
-                  <form onSubmit={(e) => triggerSave(e, 'Perdin')} className="p-6 md:p-8">
-                    <div className="space-y-5 mb-6">
-                      <div>
-                        <label className="block text-[11px] font-extrabold text-slate-500 mb-2 uppercase tracking-widest">Pilih Sub Kegiatan</label>
-                        <div className="relative group">
-                          <select name="sub_kegiatan" value={formPerdin.sub_kegiatan || ''} onChange={(e) => { handleInputPerdin(e); setCurrentPagePerdin(1); }} required className="w-full p-3.5 text-sm bg-slate-50 font-semibold border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none appearance-none cursor-pointer shadow-inner transition-all hover:bg-slate-100 text-slate-700">
-                            <option value="" disabled>-- Pilih Sub Kegiatan ({selectedYear}) --</option>
-                            {currentSub.filter(s => getPaguKategori(s, 'perdin') > 0).map((sub, idx) => (<option key={idx} value={sub.nama_sub}>{sub.nama_sub}</option>))}
-                          </select>
-                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400 group-hover:text-indigo-500 transition-colors"><ChevronRight className="rotate-90" size={16}/></div>
+                  {perdinMode === 'input' ? (
+                    <form onSubmit={(e) => triggerSave(e, 'Perdin')} className="p-6 md:p-8 animate-in fade-in zoom-in-95 duration-300">
+                      <div className="space-y-5 mb-6">
+                        <div>
+                          <label className="block text-[11px] font-extrabold text-slate-500 mb-2 uppercase tracking-widest">Pilih Sub Kegiatan</label>
+                          <div className="relative group">
+                            <select name="sub_kegiatan" value={formPerdin.sub_kegiatan || ''} onChange={(e) => { handleInputPerdin(e); setCurrentPagePerdin(1); }} required className="w-full p-3.5 text-sm bg-slate-50 font-semibold border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none appearance-none cursor-pointer shadow-inner transition-all hover:bg-slate-100 text-slate-700">
+                              <option value="" disabled>-- Pilih Sub Kegiatan ({selectedYear}) --</option>
+                              {currentSub.filter(s => getPaguKategori(s, 'perdin') > 0).map((sub, idx) => (<option key={idx} value={sub.nama_sub}>{sub.nama_sub}</option>))}
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400 group-hover:text-indigo-500 transition-colors"><ChevronRight className="rotate-90" size={16}/></div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-extrabold text-slate-500 mb-2 uppercase tracking-widest">Tujuan Perjalanan Dinas</label>
+                          <input type="text" name="tujuan" value={formPerdin.tujuan || ''} onChange={handleInputPerdin} required className="w-full p-3.5 text-sm bg-slate-50 font-medium border border-slate-200 rounded-2xl outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 shadow-inner transition-all text-slate-800" placeholder="Cth: Koordinasi Aplikasi" />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-extrabold text-slate-500 mb-2 uppercase tracking-widest">Lokasi Tujuan</label>
+                          <input type="text" name="lokasi" value={formPerdin.lokasi || ''} onChange={handleInputPerdin} required className="w-full p-3.5 text-sm bg-slate-50 font-medium border border-slate-200 rounded-2xl outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 shadow-inner transition-all text-slate-800" placeholder="Cth: Jakarta Selatan" />
+                        </div>
+
+                        <div className="pt-6 border-t border-slate-100 mt-6 relative">
+                          <span className="absolute -top-3 left-0 bg-white px-2 text-[10px] font-extrabold text-indigo-500 uppercase tracking-widest">Daftar Anggota & Nominal</span>
+                          
+                          <div className="space-y-4 pt-2">
+                            {formPerdin.peserta.map((p, index) => (
+                              <div key={index} className="flex gap-3 items-start sm:items-center bg-slate-50/50 p-4 rounded-2xl border border-slate-100 group">
+                                
+                                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-black text-xs shrink-0 mt-1 sm:mt-0 shadow-sm border border-indigo-200/50">
+                                  {index + 1}
+                                </div>
+
+                                <div className="flex-1 space-y-3 sm:space-y-0 sm:flex sm:gap-3">
+                                  <input type="text" value={p.nama} onChange={(e) => handlePesertaChange(index, 'nama', e.target.value)} required className="w-full p-3 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none text-slate-700 font-semibold shadow-sm" placeholder="Nama..." />
+                                  <input type="text" value={p.nominal} onChange={(e) => handlePesertaChange(index, 'nominal', e.target.value)} required className="w-full p-3 text-sm bg-white border border-indigo-300 rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none font-black text-indigo-700 shadow-sm" placeholder="Nominal Rp..." />
+                                </div>
+                                {formPerdin.peserta.length > 1 && (
+                                  <button type="button" onClick={() => removePeserta(index)} className="p-3 text-slate-400 hover:text-red-500 bg-white border border-slate-200 rounded-xl hover:bg-red-50 hover:border-red-100 transition-all shadow-sm mt-1 sm:mt-0">
+                                    <Trash2 size={18} strokeWidth={2.5}/>
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+
+                          <button type="button" onClick={addPeserta} className="mt-5 w-full py-3.5 flex items-center justify-center gap-2 text-sm font-bold text-indigo-600 bg-indigo-50/50 hover:bg-indigo-100 rounded-2xl transition-colors border-2 border-indigo-100 border-dashed">
+                            <PlusCircle size={18} strokeWidth={2.5}/> Tambah Anggota Perdin
+                          </button>
                         </div>
                       </div>
 
-                      <div>
-                        <label className="block text-[11px] font-extrabold text-slate-500 mb-2 uppercase tracking-widest">Tujuan Perjalanan Dinas</label>
-                        <input type="text" name="tujuan" value={formPerdin.tujuan || ''} onChange={handleInputPerdin} required className="w-full p-3.5 text-sm bg-slate-50 font-medium border border-slate-200 rounded-2xl outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 shadow-inner transition-all text-slate-800" placeholder="Cth: Koordinasi Aplikasi" />
+                      <div className="bg-slate-50 p-5 rounded-[1.5rem] border border-slate-100 mb-8 flex justify-between items-center min-w-0 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-2 h-full bg-gradient-to-b from-indigo-400 to-purple-400"></div>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap mr-2">Total Realisasi (Rp)</span>
+                        <span className="text-2xl font-black text-indigo-600 truncate" title={formatRp(currentTotalPerdin)}><AnimatedNominal value={currentTotalPerdin} /></span>
                       </div>
 
-                      <div>
-                        <label className="block text-[11px] font-extrabold text-slate-500 mb-2 uppercase tracking-widest">Lokasi Tujuan</label>
-                        <input type="text" name="lokasi" value={formPerdin.lokasi || ''} onChange={handleInputPerdin} required className="w-full p-3.5 text-sm bg-slate-50 font-medium border border-slate-200 rounded-2xl outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 shadow-inner transition-all text-slate-800" placeholder="Cth: Jakarta Selatan" />
-                      </div>
-
-                      <div className="pt-6 border-t border-slate-100 mt-6 relative">
-                        <span className="absolute -top-3 left-0 bg-white px-2 text-[10px] font-extrabold text-indigo-500 uppercase tracking-widest">Daftar Anggota & Nominal</span>
-                        
-                        <div className="space-y-4 pt-2">
-                          {formPerdin.peserta.map((p, index) => (
-                            <div key={index} className="flex gap-3 items-start sm:items-center bg-slate-50/50 p-4 rounded-2xl border border-slate-100 group">
-                              
-                              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-black text-xs shrink-0 mt-1 sm:mt-0 shadow-sm border border-indigo-200/50">
-                                {index + 1}
-                              </div>
-
-                              <div className="flex-1 space-y-3 sm:space-y-0 sm:flex sm:gap-3">
-                                <input type="text" value={p.nama} onChange={(e) => handlePesertaChange(index, 'nama', e.target.value)} required className="w-full p-3 text-sm bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none text-slate-700 font-semibold shadow-sm" placeholder="Nama..." />
-                                <input type="text" value={p.nominal} onChange={(e) => handlePesertaChange(index, 'nominal', e.target.value)} required className="w-full p-3 text-sm bg-white border border-indigo-300 rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none font-black text-indigo-700 shadow-sm" placeholder="Nominal Rp..." />
-                              </div>
-                              {formPerdin.peserta.length > 1 && (
-                                <button type="button" onClick={() => removePeserta(index)} className="p-3 text-slate-400 hover:text-red-500 bg-white border border-slate-200 rounded-xl hover:bg-red-50 hover:border-red-100 transition-all shadow-sm mt-1 sm:mt-0">
-                                  <Trash2 size={18} strokeWidth={2.5}/>
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-
-                        <button type="button" onClick={addPeserta} className="mt-5 w-full py-3.5 flex items-center justify-center gap-2 text-sm font-bold text-indigo-600 bg-indigo-50/50 hover:bg-indigo-100 rounded-2xl transition-colors border-2 border-indigo-100 border-dashed">
-                          <PlusCircle size={18} strokeWidth={2.5}/> Tambah Anggota Perdin
+                      <div className="flex flex-col gap-3">
+                        <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-[0_8px_20px_rgb(59,130,246,0.25)] hover:shadow-[0_10px_25px_rgb(59,130,246,0.35)] hover:-translate-y-0.5 transition-all duration-300">
+                          <Send size={18} /> {isEditing ? 'Simpan Perubahan' : 'Kirim Realisasi Perdin'}
                         </button>
+                        {isEditing && (
+                          <button type="button" onClick={cancelEdit} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-4 px-6 rounded-2xl transition-all">Batal Edit</button>
+                        )}
+                      </div>
+                    </form>
+                  ) : (
+                    // MODE KALKULATOR PREDIKTOR (RENCANA PERJALANAN / DRAFT)
+                    <div className="p-6 md:p-8 animate-in fade-in zoom-in-95 duration-300">
+                      <div className="space-y-5 mb-6">
+                        <div>
+                          <label className="block text-[11px] font-extrabold text-slate-500 mb-2 uppercase tracking-widest">1. Pilih Sub Kegiatan</label>
+                          <div className="relative group">
+                            <select name="sub_kegiatan" value={predictForm.sub_kegiatan} onChange={handlePredictChange} className="w-full p-3.5 text-sm bg-slate-50 font-semibold border border-slate-200 rounded-2xl focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none appearance-none cursor-pointer shadow-inner transition-all text-slate-700">
+                              <option value="" disabled>-- Pilih Sub Kegiatan --</option>
+                              {currentSub.filter(s => getPaguKategori(s, 'perdin') > 0).map((sub, idx) => (<option key={idx} value={sub.nama_sub}>{sub.nama_sub}</option>))}
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400 group-hover:text-indigo-500 transition-colors"><ChevronDown size={16}/></div>
+                          </div>
+                        </div>
+
+                        {predictForm.sub_kegiatan && (
+                          <div className="animate-in fade-in slide-in-from-top-4 duration-300">
+                            
+                            <div className="flex justify-between items-center p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 mb-6">
+                              <span className="text-[10px] font-black uppercase tracking-widest text-indigo-800 flex items-center gap-1.5"><Wallet size={14}/> Sisa Anggaran</span>
+                              <span className="text-lg font-black text-indigo-700"><AnimatedNominal value={sisaAnggaranPredict} /></span>
+                            </div>
+
+                            <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50/50 shadow-inner">
+                              <label className="block text-[11px] font-extrabold text-slate-500 mb-4 uppercase tracking-widest border-b border-slate-200 pb-2">2. Tambahkan Rencana</label>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <div>
+                                  <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Lokasi / Daerah (Riwayat)</label>
+                                  <div className="relative group">
+                                    <select name="lokasi" value={predictForm.lokasi} onChange={handlePredictChange} className="w-full p-3 text-sm bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/50 shadow-sm appearance-none cursor-pointer text-slate-700 font-semibold">
+                                      <option value="" disabled>-- Pilih Daerah --</option>
+                                      {suggestionList.map(s => <option key={s.lokasi} value={s.lokasi}>{s.lokasi}</option>)}
+                                    </select>
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400"><ChevronDown size={14}/></div>
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-wider">Estimasi Biaya (Rp)</label>
+                                  <input type="text" name="estimasi_biaya" value={predictForm.estimasi_biaya} onChange={handlePredictChange} className="w-full p-3 text-sm bg-white border border-amber-300 rounded-xl outline-none focus:ring-2 focus:ring-amber-500/50 shadow-sm transition-all font-black text-amber-900" placeholder="Ketik nominal manual..." />
+                                </div>
+                              </div>
+                              <button type="button" onClick={addDraftToCart} disabled={!predictForm.lokasi || !predictForm.estimasi_biaya} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                                <PlusCircle size={16} strokeWidth={3}/> Tambahkan Ke Rencana
+                              </button>
+                            </div>
+
+                            {/* Keranjang Draft Rencana */}
+                            {cartPredict.length > 0 && (
+                              <div className="mt-6">
+                                <label className="block text-[11px] font-extrabold text-slate-500 mb-3 uppercase tracking-widest">Daftar Keberangkatan Anda</label>
+                                <div className="space-y-2 mb-4">
+                                  {cartPredict.map((item) => (
+                                    <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200 shadow-sm group">
+                                      <div className="flex items-center gap-3 min-w-0">
+                                        <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg"><MapPin size={14} strokeWidth={2.5}/></div>
+                                        <span className="text-sm font-bold text-slate-700 truncate">{item.lokasi}</span>
+                                      </div>
+                                      <div className="flex items-center gap-3 shrink-0">
+                                        <span className="text-sm font-black text-indigo-600"><AnimatedNominal value={item.cost} /></span>
+                                        <button onClick={() => removeDraftFromCart(item.id)} className="text-slate-400 hover:text-red-500 p-1"><XCircle size={16}/></button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* Hasil Prediksi Keseluruhan */}
+                                <div className={`p-5 rounded-3xl border relative overflow-hidden transition-colors duration-500 ${isPredictSafe ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
+                                   <div className={`absolute -top-10 -right-10 w-40 h-40 rounded-full blur-3xl opacity-40 ${isPredictSafe ? 'bg-emerald-200' : 'bg-red-200'}`}></div>
+                                   <div className="relative z-10 flex items-start gap-4">
+                                     <div className={`p-3 rounded-2xl text-white ${isPredictSafe ? 'bg-emerald-500 shadow-[0_4px_15px_rgba(16,185,129,0.3)]' : 'bg-red-500 shadow-[0_4px_15px_rgba(239,68,68,0.3)]'}`}>
+                                       {isPredictSafe ? <CheckCircle size={24} /> : <XCircle size={24} />}
+                                     </div>
+                                     <div className="flex-1 min-w-0">
+                                       <h4 className={`text-xs md:text-sm font-black uppercase tracking-wider mb-1 ${isPredictSafe ? 'text-emerald-800' : 'text-red-800'}`}>
+                                         {isPredictSafe ? 'STATUS AMAN' : 'DANA TIDAK MENCUKUPI'}
+                                       </h4>
+                                       <p className={`text-[11px] md:text-xs font-semibold mb-3 ${isPredictSafe ? 'text-emerald-600' : 'text-red-600'}`}>
+                                         {isPredictSafe 
+                                           ? `Anggaran memadai untuk ${cartPredict.length} rencana perjalanan.` 
+                                           : `Anggaran kurang ${formatRp(Math.abs(sisaSetelahPredict))} untuk merealisasikan rencana ini.`}
+                                       </p>
+                                       <div className="bg-white/60 backdrop-blur-sm p-3 rounded-xl border border-white/50 flex justify-between items-center">
+                                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Sisa Akhir Anggaran:</span>
+                                         <span className={`text-base md:text-lg font-black truncate ${isPredictSafe ? 'text-emerald-700' : 'text-red-600'}`} title={formatRp(isPredictSafe ? sisaSetelahPredict : 0)}>
+                                            <AnimatedNominal value={isPredictSafe ? sisaSetelahPredict : 0} />
+                                         </span>
+                                       </div>
+                                     </div>
+                                   </div>
+                                </div>
+                              </div>
+                            )}
+
+                          </div>
+                        )}
                       </div>
                     </div>
+                  )}
 
-                    <div className="bg-slate-50 p-5 rounded-[1.5rem] border border-slate-100 mb-8 flex justify-between items-center min-w-0 relative overflow-hidden">
-                      <div className="absolute top-0 left-0 w-2 h-full bg-gradient-to-b from-indigo-400 to-purple-400"></div>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap mr-2">Total Realisasi (Rp)</span>
-                      <span className="text-2xl font-black text-indigo-600 truncate" title={formatRp(currentTotalPerdin)}><AnimatedNominal value={currentTotalPerdin} /></span>
-                    </div>
-
-                    <div className="flex flex-col gap-3">
-                      <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-[0_8px_20px_rgb(59,130,246,0.25)] hover:shadow-[0_10px_25px_rgb(59,130,246,0.35)] hover:-translate-y-0.5 transition-all duration-300">
-                        <Send size={18} /> {isEditing ? 'Simpan Perubahan' : 'Kirim Realisasi Perdin'}
-                      </button>
-                      {isEditing && (
-                        <button type="button" onClick={cancelEdit} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-4 px-6 rounded-2xl transition-all">Batal Edit</button>
-                      )}
-                    </div>
-                  </form>
                 </div>
               </div>
 
@@ -1371,7 +1673,7 @@ export default function App() {
                       <div className="text-base sm:text-lg lg:text-base xl:text-lg font-black text-slate-700 truncate" title={formatRp(currentPaguPerdinSummary)}><AnimatedNominal value={currentPaguPerdinSummary} /></div>
                     </div>
                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center min-w-0">
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 truncate">Perdin Digunakan</div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 truncate">Realisasi (Dashboard)</div>
                       <div className="text-base sm:text-lg lg:text-base xl:text-lg font-black text-red-500 truncate" title={formatRp(historyPerdinSum)}><AnimatedNominal value={historyPerdinSum} /></div>
                     </div>
                     <div className="bg-indigo-50/80 p-4 rounded-2xl border border-indigo-100 text-center min-w-0 flex flex-col justify-center relative overflow-hidden">
@@ -1406,10 +1708,10 @@ export default function App() {
                     </button>
                   </div>
                   <div className="p-0 overflow-x-auto flex-1">
-                    <table className="w-full text-left border-collapse min-w-[700px]">
+                    <table className="w-full text-left border-collapse min-w-[800px]">
                       <thead className="bg-slate-50/80 text-slate-400 text-[10px] uppercase tracking-widest font-black">
                         <tr>
-                          <th className="p-5 font-bold border-b border-slate-100">Informasi & Lokasi</th>
+                          <th className="p-5 font-bold border-b border-slate-100 pl-8">Lokasi & Tujuan</th>
                           <th className="p-5 font-bold w-64 border-b border-slate-100">Rincian Anggota</th>
                           <th className="p-5 text-right font-bold w-36 border-b border-slate-100">Total (Rp)</th>
                           <th className="p-5 text-center font-bold w-24 border-b border-slate-100">Aksi</th>
@@ -1424,28 +1726,36 @@ export default function App() {
                             try { parsedPeserta = JSON.parse(item.rincian_peserta); } catch(e){}
                             
                             const totalNominalReal = getPerdinTotal(item);
+                            const isRealized = String(item.status_realisasi) !== 'false';
 
                             return (
                               <tr key={index} className="hover:bg-slate-50/80 transition-colors align-top group">
                                 <td className="p-5 min-w-[200px]">
-                                  <div className="font-extrabold text-slate-700 text-sm md:text-base leading-snug break-words group-hover:text-indigo-600 transition-colors">{item.lokasi}</div>
-                                  {item.tujuan && <div className="text-[11px] font-bold text-indigo-500 uppercase tracking-widest mt-1.5 leading-snug break-words">{item.tujuan}</div>}
-                                  <div className="text-xs flex flex-wrap gap-2 items-center text-slate-500 mt-2.5">
-                                    <span className="bg-white border border-slate-200 shadow-sm px-2.5 py-1 rounded-lg text-[10px] uppercase font-bold text-slate-600 whitespace-nowrap">{String(item.timestamp).substring(0, 10)}</span>
-                                    <span className="leading-tight font-medium break-words">{item.sub_kegiatan}</span>
+                                  <div className="flex items-start gap-3">
+                                    <button onClick={() => toggleRealisasiPerdin(item)} className={`mt-0.5 p-1.5 rounded-lg border transition-colors shrink-0 flex items-center gap-1 ${isRealized ? 'bg-emerald-50 text-emerald-600 border-emerald-200 shadow-sm' : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'}`} title={isRealized ? 'Terealisasi (Masuk Dashboard)' : 'Hanya Draft (Belum Masuk Dashboard)'}>
+                                      {isRealized ? <CheckCircle size={16} strokeWidth={3}/> : <XCircle size={16} strokeWidth={3}/>}
+                                    </button>
+                                    <div className="min-w-0">
+                                      <div className={`font-extrabold text-sm md:text-base leading-snug break-words group-hover:text-indigo-600 transition-colors ${isRealized ? 'text-slate-800' : 'text-slate-500'}`}>{item.lokasi}</div>
+                                      {item.tujuan && <div className={`text-[11px] font-bold uppercase tracking-widest mt-1.5 leading-snug break-words ${isRealized ? 'text-indigo-500' : 'text-slate-400'}`}>{item.tujuan}</div>}
+                                      <div className="text-xs flex flex-wrap gap-2 items-center text-slate-500 mt-2.5">
+                                        <span className="bg-white border border-slate-200 shadow-sm px-2.5 py-1 rounded-lg text-[10px] uppercase font-bold text-slate-600 whitespace-nowrap">{String(item.timestamp).substring(0, 10)}</span>
+                                        <span className="leading-tight font-medium break-words">{item.sub_kegiatan}</span>
+                                      </div>
+                                    </div>
                                   </div>
                                 </td>
                                 <td className="p-5">
                                   <div className="flex flex-col gap-2">
                                     {parsedPeserta.map((p, i) => (
-                                      <div key={i} className="flex justify-between items-center text-xs bg-white border border-slate-200 shadow-sm text-slate-600 px-3 py-2 rounded-xl group/peserta hover:border-indigo-200 transition-colors">
-                                        <span className="font-bold break-words leading-tight mr-2 group-hover/peserta:text-indigo-600 transition-colors" title={p.nama}>{p.nama}</span>
-                                        <span className="font-black text-slate-800 whitespace-nowrap">{p.nominal}</span>
+                                      <div key={i} className={`flex justify-between items-center text-xs bg-white border shadow-sm px-3 py-2 rounded-xl group/peserta transition-colors ${isRealized ? 'border-slate-200 text-slate-600 hover:border-indigo-200' : 'border-slate-100 text-slate-400'}`}>
+                                        <span className={`font-bold break-words leading-tight mr-2 transition-colors ${isRealized ? 'group-hover/peserta:text-indigo-600' : ''}`} title={p.nama}>{p.nama}</span>
+                                        <span className={`font-black whitespace-nowrap ${isRealized ? 'text-slate-800' : 'text-slate-400'}`}>{p.nominal}</span>
                                       </div>
                                     ))}
                                   </div>
                                 </td>
-                                <td className="p-5 text-right font-black text-indigo-600 text-sm md:text-base whitespace-nowrap" title={formatRp(totalNominalReal)}><AnimatedNominal value={totalNominalReal} /></td>
+                                <td className={`p-5 text-right font-black text-sm md:text-base whitespace-nowrap ${isRealized ? 'text-indigo-600' : 'text-slate-400'}`} title={formatRp(totalNominalReal)}><AnimatedNominal value={totalNominalReal} /></td>
                                 <td className="p-5">
                                   <div className="flex justify-center gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
                                     <button onClick={() => editData(item, 'Perdin')} className="p-2 text-yellow-600 bg-yellow-50 rounded-xl hover:bg-yellow-100 hover:shadow-sm transition-all"><Edit size={16} strokeWidth={2.5}/></button>
