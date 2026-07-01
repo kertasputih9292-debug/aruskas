@@ -598,34 +598,6 @@ export default function App() {
 
   const totalSisaMasterKeseluruhan = totalPaguMasterKeseluruhan - totalRealisasiMasterKeseluruhan;
 
-  const dashboardAlerts = [];
-  if (activeTab === 'dashboard') {
-    currentSub.forEach(sub => {
-      parseKategori(sub).forEach(kategori => {
-        const pagu = parseRibuan(kategori.nominal);
-        if (pagu <= 0) return;
-        
-        const isPerdin = (kategori.nama || '').toLowerCase().includes('perjalanan dinas') || (kategori.nama || '').toLowerCase().includes('perdin');
-        const realisasi = isPerdin 
-          ? currentPerdin.filter(item => item.sub_kegiatan === sub.nama_sub).filter(isRealized).reduce((sum, item) => sum + getPerdinTotal(item), 0)
-          : currentMamin.filter(item => item.sub_kegiatan === sub.nama_sub && (item.kategori_belanja || 'Makan Minum Rapat') === kategori.nama).reduce((sum, item) => sum + (parseFloat(item.realisasi_anggaran) || 0), 0);
-        
-        const sisa = pagu - realisasi;
-        const percentUsed = (realisasi / pagu) * 100;
-        
-        if (percentUsed >= 80) {
-           dashboardAlerts.push({
-             sub: sub.nama_sub,
-             kategori: kategori.nama,
-             percent: percentUsed,
-             sisa: sisa
-           });
-        }
-      });
-    });
-    dashboardAlerts.sort((a, b) => b.percent - a.percent); 
-  }
-
   const NavItem = ({ id, icon: Icon, label }) => (
     <button 
       onClick={() => { setActiveTab(id); setIsMobileMenuOpen(false); cancelEdit(); }} 
@@ -782,26 +754,6 @@ export default function App() {
                 </div>
               </div>
 
-              {dashboardAlerts.length > 0 && (
-                <div className="bg-red-50/80 border border-red-100 rounded-3xl p-6 shadow-sm relative overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
-                  <div className="absolute -right-10 -top-10 w-40 h-40 bg-red-200/50 rounded-full blur-3xl"></div>
-                  <h3 className="font-black text-red-700 text-lg mb-4 flex items-center gap-2 relative z-10">
-                    <AlertTriangle size={22} strokeWidth={2.5} className="animate-pulse"/> Peringatan Dini Anggaran (Kritis)
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
-                    {dashboardAlerts.map((alert, idx) => (
-                      <div key={idx} className="bg-white rounded-2xl p-4 border border-red-100/50 shadow-sm flex flex-col hover:border-red-300 transition-colors">
-                        <span className="font-extrabold text-slate-700 text-sm">{alert.kategori} <span className="font-medium text-xs text-slate-500">({alert.sub})</span></span>
-                        <div className="flex justify-between items-end mt-2">
-                           <span className="text-xs font-bold text-red-500 flex items-center gap-1"><AlertCircle size={12}/> Terpakai: {alert.percent.toFixed(1)}%</span>
-                           <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Sisa: <span className="text-red-600">{formatRp(alert.sisa)}</span></span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               <div className="flex justify-end mb-4">
                 <button onClick={toggleGlobalCards} className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-widest hover:text-indigo-600 transition-colors bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm hover:bg-indigo-50 hover:border-indigo-200">
                   {showGlobalCards ? <><EyeOff size={16} strokeWidth={2.5}/> Sembunyikan Kartu Global</> : <><Eye size={16} strokeWidth={2.5}/> Tampilkan Kartu Global</>}
@@ -896,11 +848,12 @@ export default function App() {
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 lg:gap-8">
                 {currentSub.length === 0 ? (
-                  <div className="col-span-full bg-white rounded-3xl p-10 text-center text-slate-400 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] font-medium">Belum ada Master Data Sub Kegiatan yang tercatat.</div>
+                  <div className="col-span-full bg-white rounded-3xl p-10 text-center text-slate-400 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] font-medium">Belum ada Master Data Sub Kegiatan yang tercatat di {selectedYear}.</div>
                 ) : (
                   currentSub.map((sub, idx) => {
                     const kategoriList = parseKategori(sub);
                     const isExpanded = expandedDashSubs.includes(sub.nama_sub);
+                    const totalPaguSub = kategoriList.reduce((sum, k) => sum + parseRibuan(k.nominal), 0);
                     
                     return (
                       <div key={idx} className="bg-white rounded-3xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.06)] transition-all duration-500 flex flex-col overflow-hidden group/board">
@@ -911,13 +864,35 @@ export default function App() {
                               <span className="bg-white border border-slate-200 text-slate-500 px-2 py-1 rounded-md text-[10px] mr-3 font-bold uppercase tracking-widest align-middle shadow-sm">Sub</span>
                               {sub.nama_sub}
                             </h3>
+                            <div className="text-[11px] font-bold text-indigo-500 uppercase tracking-widest mt-1.5 flex items-center gap-1.5">
+                              Total Pagu: <span className="font-black text-indigo-700"><AnimatedNominal value={totalPaguSub} /></span>
+                            </div>
                             
-                            <div className={`flex flex-wrap gap-2 transition-all duration-500 ease-in-out origin-top-left ${isExpanded ? 'opacity-0 max-h-0 scale-y-0 mt-0 overflow-hidden' : 'opacity-100 max-h-20 scale-y-100 mt-3'}`}>
+                            <div className={`flex flex-wrap gap-2 transition-all duration-500 ease-in-out origin-top-left ${isExpanded ? 'opacity-0 max-h-0 scale-y-0 mt-0 overflow-hidden' : 'opacity-100 max-h-20 scale-y-100 mt-4'}`}>
                               {kategoriList.map((k, i) => {
                                 const IconKat = getCategoryIcon(k.nama);
+                                const paguKat = parseRibuan(k.nominal);
+                                const isPerdin = k.nama.toLowerCase().includes('perjalanan dinas') || k.nama.toLowerCase().includes('perdin');
+                                const realisasiKat = isPerdin 
+                                  ? currentPerdin.filter(item => item.sub_kegiatan === sub.nama_sub).filter(isRealized).reduce((sum, item) => sum + getPerdinTotal(item), 0)
+                                  : currentMamin.filter(item => item.sub_kegiatan === sub.nama_sub && (item.kategori_belanja || 'Makan Minum Rapat') === k.nama).reduce((sum, item) => sum + (parseFloat(item.realisasi_anggaran) || 0), 0);
+                                
+                                const percentUsed = paguKat > 0 ? (realisasiKat / paguKat) * 100 : 0;
+                                
+                                let badgeBg = "bg-slate-100/80 text-slate-500 border-slate-200";
+                                let iconColor = "text-slate-400";
+                                
+                                if (percentUsed >= 100) {
+                                  badgeBg = "bg-red-50 text-red-700 border-red-200";
+                                  iconColor = "text-red-500";
+                                } else if (percentUsed > 0) {
+                                  badgeBg = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                                  iconColor = "text-emerald-500";
+                                }
+
                                 return (
-                                  <div key={i} className="flex items-center gap-1.5 bg-slate-100/80 text-slate-500 px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-sm" title={k.nama}>
-                                    <IconKat size={12} strokeWidth={3} className="text-slate-400"/>
+                                  <div key={i} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border shadow-sm transition-colors duration-300 ${badgeBg}`} title={`${k.nama} (Terpakai: ${percentUsed.toFixed(1)}%)`}>
+                                    <IconKat size={12} strokeWidth={3} className={iconColor}/>
                                     <span className="text-[10px] font-bold uppercase tracking-wider max-w-[100px] truncate">{k.nama}</span>
                                   </div>
                                 )
@@ -1054,7 +1029,7 @@ export default function App() {
                       </div>
 
                       <div className="flex flex-col gap-3">
-                        <button type="submit" disabled={loading || !formDynamic.sub_kegiatan} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-[0_8px_20px_rgb(59,130,246,0.25)] hover:shadow-[0_10px_25px_rgb(59,130,246,0.35)] hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none transition-all duration-300"><Send size={18} /> {isEditing ? 'Simpan Perubahan' : 'Save'}</button>
+                        <button type="submit" disabled={loading || !formDynamic.sub_kegiatan} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-[0_8px_20px_rgb(59,130,246,0.25)] hover:shadow-[0_10px_25px_rgb(59,130,246,0.35)] hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none transition-all duration-300"><Send size={18} /> {isEditing ? 'Simpan Perubahan' : 'Kirim Realisasi'}</button>
                         {isEditing && <button type="button" onClick={cancelEdit} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-4 px-6 rounded-2xl transition-all">Batal Edit</button>}
                       </div>
                     </form>
@@ -1499,6 +1474,7 @@ export default function App() {
           {activeTab === 'perdin' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               
+              {/* PANEL KIRI: FORM INPUT / PREDIKTOR PERDIN */}
               <div className="lg:col-span-5 2xl:col-span-4 anim-fade-up">
                 <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden sticky top-6">
                   
@@ -1571,7 +1547,7 @@ export default function App() {
 
                       <div className="flex flex-col gap-3">
                         <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-[0_8px_20px_rgb(59,130,246,0.25)] hover:shadow-[0_10px_25px_rgb(59,130,246,0.35)] hover:-translate-y-0.5 transition-all duration-300">
-                          <Send size={18} /> {isEditing ? 'Simpan Perubahan' : 'Save'}
+                          <Send size={18} /> Save
                         </button>
                         {isEditing && (
                           <button type="button" onClick={cancelEdit} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-4 px-6 rounded-2xl transition-all">Batal Edit</button>
@@ -1579,6 +1555,7 @@ export default function App() {
                       </div>
                     </form>
                   ) : (
+                    // MODE RENCANA DRAFT
                     <div className="p-6 md:p-8 animate-in fade-in zoom-in-95 duration-300">
                       <div className="space-y-5 mb-6">
                         <div>
@@ -1691,6 +1668,7 @@ export default function App() {
                 </div>
               </div>
 
+              {/* PANEL KANAN: REKAP DAN RIWAYAT PERDIN */}
               <div className="lg:col-span-7 2xl:col-span-8 flex flex-col gap-6 anim-fade-right">
                 
                 <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-6 md:p-8">
