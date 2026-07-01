@@ -5,7 +5,8 @@ import {
   ChevronDown, LogOut, PlusCircle, Filter, Calculator, BookOpen, 
   Pencil, Calendar, RefreshCw, Receipt, 
   Zap, PenTool, FileText, Router, Monitor, Banknote, Package, Server, Cloud, Printer, Scissors, Check, AlertTriangle,
-  MapPin, TrendingUp, CheckCircle, XCircle, Lightbulb, Eye, EyeOff, ToggleLeft, ToggleRight
+  MapPin, TrendingUp, CheckCircle, XCircle, Lightbulb, Eye, EyeOff, ToggleLeft, ToggleRight,
+  Wrench, Car, Award, Wifi, HardDrive, Globe, RadioTower, Users
 } from 'lucide-react';
 
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzFdFFd0-ekvC6di-RUXHBOvMMun67ytCBcrzORG-Ip0Q_I3oQb51Te3OvglHYPhxb-/exec';
@@ -17,20 +18,37 @@ const toTitleCase = (str) => {
   });
 };
 
+// MESIN DETEKSI IKON PINTAR BERDASARKAN NAMA KATEGORI
 const getCategoryIcon = (name) => {
-  const lower = name.toLowerCase();
+  const lower = name?.toLowerCase() || '';
+  
+  // ---> Kategori Spesifik Baru Permintaan Anda <---
+  if (lower.includes('standard tools') || lower.includes('tools')) return Wrench;
+  if (lower.includes('go virtual') || lower.includes('virtual')) return Globe;
+  if (lower.includes('fiber optik') || lower.includes('kajian')) return RadioTower;
+  if (lower.includes('kegiatan besar')) return Users;
+  if (lower.includes('peralatan jaringan') || lower.includes('jaringan') || lower.includes('router')) return Router;
+
+  // ---> Deteksi Umum Lainnya <---
   if (lower.includes('listrik') || lower.includes('daya') || lower.includes('token')) return Zap;
   if (lower.includes('atk') || lower.includes('tulis') || lower.includes('alat kantor') || lower.includes('pensil')) return PenTool;
   if (lower.includes('kertas') || lower.includes('cover') || lower.includes('dokumen') || lower.includes('fotokopi')) return FileText;
-  if (lower.includes('jaringan') || lower.includes('router') || lower.includes('wifi') || lower.includes('internet')) return Router;
+  if (lower.includes('wifi') || lower.includes('internet')) return Wifi;
   if (lower.includes('komputer') || lower.includes('pc') || lower.includes('laptop') || lower.includes('hardware')) return Monitor;
-  if (lower.includes('honor') || lower.includes('gaji') || lower.includes('jasa') || lower.includes('uang')) return Banknote;
-  if (lower.includes('server') || lower.includes('hosting') || lower.includes('domain')) return Server;
+  if (lower.includes('honor') || lower.includes('gaji') || lower.includes('jasa') || lower.includes('uang') || lower.includes('upah')) return Banknote;
+  if (lower.includes('server') || lower.includes('hosting') || lower.includes('domain')) return HardDrive;
   if (lower.includes('langganan') || lower.includes('cloud') || lower.includes('zoom')) return Cloud;
   if (lower.includes('cetak') || lower.includes('printer') || lower.includes('tinta')) return Printer;
+  if (lower.includes('lisensi') || lower.includes('franchise') || lower.includes('hak cipta') || lower.includes('sertifikat')) return Award;
+  if (lower.includes('pemeliharaan') || lower.includes('perawatan') || lower.includes('service') || lower.includes('servis') || lower.includes('perbaikan')) return Wrench;
+  if (lower.includes('transport') || lower.includes('bensin') || lower.includes('kendaraan') || lower.includes('bbm') || lower.includes('sewa')) return Car;
+  if (lower.includes('makan') || lower.includes('minum') || lower.includes('mamin') || lower.includes('konsumsi')) return Utensils;
+  if (lower.includes('perjalanan') || lower.includes('dinas') || lower.includes('perdin') || lower.includes('tiket')) return Plane;
+  
   return Package; 
 };
 
+// KOMPONEN ANIMASI NOMINAL UANG CERDAS
 const AnimatedNominal = ({ value }) => {
   const [displayValue, setDisplayValue] = useState(0);
   const actualValueRef = useRef(0);
@@ -80,9 +98,9 @@ const ProgressBar = ({ realisasi, pagu }) => {
   const percentValue = pagu > 0 ? (realisasi / pagu) * 100 : 0;
   const safePercent = Math.min(Math.max(percentValue, 0), 100);
   
-  let colorClass = 'bg-emerald-500'; 
-  if (percentValue >= 80) colorClass = 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]'; 
-  else if (percentValue >= 50) colorClass = 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]'; 
+  let colorClass = 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.4)]'; 
+  if (percentValue >= 100) colorClass = 'bg-red-400 shadow-[0_0_10px_rgba(248,113,113,0.4)]'; 
+  else if (percentValue >= 75) colorClass = 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.4)]'; 
 
   useEffect(() => {
     const timer = setTimeout(() => setWidth(safePercent), 300);
@@ -90,7 +108,7 @@ const ProgressBar = ({ realisasi, pagu }) => {
   }, [safePercent]);
 
   return (
-    <div className="w-full bg-slate-100/80 h-1.5 md:h-2 rounded-full mt-2.5 overflow-hidden flex shadow-inner relative">
+    <div className="w-full bg-slate-100/60 h-1.5 md:h-2 rounded-full mt-3 overflow-hidden flex shadow-inner relative">
       <div className={`h-full ${colorClass} transition-all duration-1000 ease-out`} style={{ width: `${width}%` }}></div>
     </div>
   );
@@ -730,9 +748,10 @@ export default function App() {
           {activeTab === 'dashboard' && (
             <div className="space-y-10 anim-fade-up">
               
-              <div className="bg-white rounded-3xl p-6 md:p-8 border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-60"></div>
-                <div className="absolute bottom-0 left-0 w-40 h-40 bg-blue-50 rounded-full blur-2xl opacity-60"></div>
+              {/* Desain Modern Glassmorphism Card */}
+              <div className="bg-gradient-to-br from-white via-slate-50 to-indigo-50/30 rounded-[2rem] p-6 md:p-8 border border-indigo-50 shadow-[0_8px_30px_rgb(59,130,246,0.05)] relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6 group">
+                <div className="absolute top-[-20%] right-[-10%] w-72 h-72 bg-gradient-to-br from-indigo-200 to-purple-200 rounded-full blur-3xl opacity-30 animate-pulse group-hover:scale-110 transition-transform duration-1000"></div>
+                <div className="absolute bottom-[-20%] left-[-10%] w-56 h-56 bg-gradient-to-br from-blue-200 to-cyan-200 rounded-full blur-3xl opacity-30 animate-pulse group-hover:scale-110 transition-transform duration-1000" style={{ animationDelay: '2s' }}></div>
                 
                 <div className="relative z-10 flex items-center gap-4">
                    <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center text-white shadow-lg"><Wallet size={28} /></div>
@@ -742,14 +761,16 @@ export default function App() {
                    </div>
                 </div>
 
-                <div className="relative z-10 flex flex-row gap-6 w-full md:w-auto">
-                   <div className="bg-emerald-50/80 border border-emerald-100 px-5 py-4 rounded-2xl flex-1 md:flex-none">
-                      <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest flex items-center gap-1.5 mb-1"><TrendingUp size={12}/> Terealisasi</div>
-                      <div className="text-lg md:text-xl font-black text-emerald-700"><AnimatedNominal value={totalRealisasiMasterKeseluruhan} /></div>
+                <div className="relative z-10 flex flex-row gap-4 w-full md:w-auto">
+                   <div className="bg-gradient-to-br from-emerald-50/90 to-teal-50/90 border border-emerald-100/60 px-5 py-4 rounded-2xl flex-1 md:flex-none shadow-sm backdrop-blur-sm group/mini overflow-hidden relative">
+                      <div className="absolute right-0 top-0 w-20 h-20 bg-emerald-200/40 rounded-full blur-xl -mr-8 -mt-8 group-hover/mini:scale-150 transition-transform duration-700"></div>
+                      <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest flex items-center gap-1.5 mb-1 relative z-10"><TrendingUp size={12}/> Terealisasi</div>
+                      <div className="text-lg md:text-xl font-black text-emerald-700 relative z-10"><AnimatedNominal value={totalRealisasiMasterKeseluruhan} /></div>
                    </div>
-                   <div className="bg-blue-50/80 border border-blue-100 px-5 py-4 rounded-2xl flex-1 md:flex-none">
-                      <div className="text-[10px] font-bold text-blue-600 uppercase tracking-widest flex items-center gap-1.5 mb-1"><Briefcase size={12}/> Sisa Anggaran</div>
-                      <div className="text-lg md:text-xl font-black text-blue-700"><AnimatedNominal value={totalSisaMasterKeseluruhan} /></div>
+                   <div className="bg-gradient-to-br from-blue-50/90 to-indigo-50/90 border border-blue-100/60 px-5 py-4 rounded-2xl flex-1 md:flex-none shadow-sm backdrop-blur-sm group/mini overflow-hidden relative">
+                      <div className="absolute right-0 top-0 w-20 h-20 bg-blue-200/40 rounded-full blur-xl -mr-8 -mt-8 group-hover/mini:scale-150 transition-transform duration-700"></div>
+                      <div className="text-[10px] font-bold text-blue-600 uppercase tracking-widest flex items-center gap-1.5 mb-1 relative z-10"><Briefcase size={12}/> Sisa Anggaran</div>
+                      <div className="text-lg md:text-xl font-black text-blue-700 relative z-10"><AnimatedNominal value={totalSisaMasterKeseluruhan} /></div>
                    </div>
                 </div>
               </div>
@@ -763,8 +784,9 @@ export default function App() {
               {showGlobalCards && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 animate-in slide-in-from-top-4 fade-in duration-500">
                   
-                  <div className="bg-white rounded-3xl p-7 md:p-8 border border-slate-100/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden group hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow duration-500 flex flex-col">
+                  <div className="bg-white rounded-[2rem] p-7 md:p-8 border border-slate-100/80 shadow-[0_8px_30px_rgb(0,0,0,0.03)] relative overflow-hidden group hover:shadow-[0_8px_30px_rgb(59,130,246,0.06)] hover:border-indigo-100/50 transition-all duration-500 flex flex-col">
                     <div className="absolute -right-10 -top-10 w-40 h-40 bg-blue-50 rounded-full blur-3xl group-hover:bg-blue-100 transition-colors duration-500"></div>
+                    <div className="absolute inset-0 bg-gradient-to-br from-transparent to-blue-50/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                     <h3 className="font-extrabold text-xl text-slate-800 mb-6 flex items-center gap-3 relative z-10">
                       <div className="p-3 bg-blue-100 rounded-2xl text-blue-600"><Utensils size={24} /></div> Makan Minum (Global)
                     </h3>
@@ -781,8 +803,9 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-3xl p-7 md:p-8 border border-slate-100/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden group hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow duration-500 flex flex-col">
+                  <div className="bg-white rounded-[2rem] p-7 md:p-8 border border-slate-100/80 shadow-[0_8px_30px_rgb(0,0,0,0.03)] relative overflow-hidden group hover:shadow-[0_8px_30px_rgb(59,130,246,0.06)] hover:border-indigo-100/50 transition-all duration-500 flex flex-col">
                     <div className="absolute -right-10 -top-10 w-40 h-40 bg-indigo-50 rounded-full blur-3xl group-hover:bg-indigo-100 transition-colors duration-500"></div>
+                    <div className="absolute inset-0 bg-gradient-to-br from-transparent to-indigo-50/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                     <div className="flex justify-between items-center mb-6 relative z-10">
                       <h3 className="font-extrabold text-xl text-slate-800 flex items-center gap-3">
                         <div className="p-3 bg-indigo-100 rounded-2xl text-indigo-600"><Plane size={24} /></div> Perjalanan Dinas (Global)
@@ -840,7 +863,7 @@ export default function App() {
                 </div>
               )}
 
-              <div className="flex items-center gap-4 mb-6">
+              <div className="flex items-center gap-4 mb-6 mt-6">
                 <div className="h-px bg-slate-200 flex-1"></div>
                 <span className="px-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Rincian Komprehensif Sub Kegiatan</span>
                 <div className="h-px bg-slate-200 flex-1"></div>
@@ -856,9 +879,10 @@ export default function App() {
                     const totalPaguSub = kategoriList.reduce((sum, k) => sum + parseRibuan(k.nominal), 0);
                     
                     return (
-                      <div key={idx} className="bg-white rounded-3xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.06)] transition-all duration-500 flex flex-col overflow-hidden group/board">
+                      <div key={idx} className="bg-white rounded-[2rem] border border-slate-100/80 shadow-[0_8px_30px_rgb(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgb(59,130,246,0.06)] hover:border-indigo-100/50 transition-all duration-500 flex flex-col overflow-hidden group/board relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-transparent to-indigo-50/20 opacity-0 group-hover/board:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
                         
-                        <div onClick={() => toggleDashSub(sub.nama_sub)} className={`p-6 md:p-7 cursor-pointer transition-colors duration-500 flex items-start justify-between gap-4 ${isExpanded ? 'bg-slate-50 border-b border-slate-100' : 'bg-white hover:bg-slate-50/50'}`}>
+                        <div onClick={() => toggleDashSub(sub.nama_sub)} className={`p-6 md:p-7 cursor-pointer transition-colors duration-500 flex items-start justify-between gap-4 relative z-10 ${isExpanded ? 'bg-slate-50/80 border-b border-slate-100' : 'bg-transparent'}`}>
                           <div className="flex-1 min-w-0">
                             <h3 className="font-extrabold text-lg text-slate-800 truncate leading-snug" title={sub.nama_sub}>
                               <span className="bg-white border border-slate-200 text-slate-500 px-2 py-1 rounded-md text-[10px] mr-3 font-bold uppercase tracking-widest align-middle shadow-sm">Sub</span>
@@ -868,6 +892,7 @@ export default function App() {
                               Total Pagu: <span className="font-black text-indigo-700"><AnimatedNominal value={totalPaguSub} /></span>
                             </div>
                             
+                            {/* INDIKATOR BADGES SAAT TERTUTUP */}
                             <div className={`flex flex-wrap gap-2 transition-all duration-500 ease-in-out origin-top-left ${isExpanded ? 'opacity-0 max-h-0 scale-y-0 mt-0 overflow-hidden' : 'opacity-100 max-h-20 scale-y-100 mt-4'}`}>
                               {kategoriList.map((k, i) => {
                                 const IconKat = getCategoryIcon(k.nama);
@@ -905,7 +930,8 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className={`transition-[max-height,opacity,background-color] duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden ${isExpanded ? 'max-h-[3000px] opacity-100 bg-slate-50/30' : 'max-h-0 opacity-0 bg-white'}`}>
+                        {/* LIST RINCIAN (ACCORDION) */}
+                        <div className={`transition-[max-height,opacity,background-color] duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden relative z-10 ${isExpanded ? 'max-h-[3000px] opacity-100 bg-slate-50/30' : 'max-h-0 opacity-0 bg-transparent'}`}>
                           <div className="p-6 md:p-7 space-y-4">
                             {kategoriList.map((kategori, kIdx) => {
                               const pagu = parseRibuan(kategori.nominal);
@@ -921,14 +947,19 @@ export default function App() {
                                     .reduce((sum, item) => sum + (parseFloat(item.realisasi_anggaran) || 0), 0);
                               
                               const sisa = pagu - realisasi;
+                              const percentUsed = pagu > 0 ? (realisasi / pagu) * 100 : 0;
                               const IconKat = getCategoryIcon(kategori.nama);
+                              
+                              let iconBoxColor = "bg-slate-50 text-slate-500 border-slate-100";
+                              if (percentUsed >= 100) iconBoxColor = "bg-red-50 text-red-500 border-red-100";
+                              else if (percentUsed > 0) iconBoxColor = "bg-emerald-50 text-emerald-500 border-emerald-100";
                               
                               return (
                                 <div key={kIdx} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-[0_8px_20px_rgba(0,0,0,0.04)] hover:border-indigo-200 transition-all duration-300 relative overflow-hidden group/item">
                                   <div className="absolute top-0 left-0 w-1.5 h-full bg-slate-200 group-hover/item:bg-indigo-400 transition-colors duration-300"></div>
                                   <div className="pl-2">
                                     <div className="flex items-center gap-3 mb-4 border-b border-slate-50 pb-3">
-                                      <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-slate-500 group-hover/item:text-indigo-500 group-hover/item:bg-indigo-50 transition-colors duration-300"><IconKat size={18} strokeWidth={2.5}/></div>
+                                      <div className={`p-2.5 rounded-xl border transition-colors duration-300 ${iconBoxColor}`}><IconKat size={18} strokeWidth={2.5}/></div>
                                       <div className="text-sm font-extrabold text-slate-700 uppercase tracking-wide truncate" title={kategori.nama}>{kategori.nama}</div>
                                     </div>
                                     <div className="grid grid-cols-3 gap-2 text-xs md:text-sm mb-1">
@@ -983,7 +1014,7 @@ export default function App() {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 <div className="lg:col-span-5 2xl:col-span-4 anim-fade-up">
                   <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden sticky top-6">
-                    <div className="p-6 border-b border-slate-100/50 flex justify-between items-center bg-slate-50/50 backdrop-blur-md">
+                    <div className="p-6 border-b border-slate-100/50 flex justify-between items-center bg-gradient-to-r from-slate-50 to-indigo-50/30 backdrop-blur-md">
                       <h2 className="font-extrabold text-slate-800 flex items-center gap-3"><div className="p-2 bg-indigo-100 text-indigo-600 rounded-xl"><CatIcon size={20} /></div> {isEditing ? 'Edit Realisasi' : 'Input Baru'}</h2>
                     </div>
                     
@@ -1092,7 +1123,7 @@ export default function App() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               <div className="lg:col-span-5 2xl:col-span-4 anim-fade-up">
                 <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden sticky top-6">
-                  <div className="p-6 border-b border-slate-100/50 flex justify-between items-center bg-slate-50/50 backdrop-blur-md">
+                  <div className="p-6 border-b border-slate-100/50 flex justify-between items-center bg-gradient-to-r from-slate-50 to-blue-50/30 backdrop-blur-md">
                     <h3 className="font-extrabold text-slate-800 flex items-center gap-3"><div className="p-2 bg-blue-100 text-blue-600 rounded-xl"><Layers size={20} /></div> {isEditing ? 'Edit Sub Kegiatan' : 'Tambah Sub Kegiatan'}</h3>
                   </div>
 
@@ -1244,7 +1275,7 @@ export default function App() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               <div className="lg:col-span-5 2xl:col-span-4 anim-fade-up">
                 <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden sticky top-6">
-                  <div className="p-6 border-b border-slate-100/50 flex justify-between items-center bg-slate-50/50 backdrop-blur-md">
+                  <div className="p-6 border-b border-slate-100/50 flex justify-between items-center bg-gradient-to-r from-slate-50 to-blue-50/30 backdrop-blur-md">
                     <h2 className="font-extrabold text-slate-800 flex items-center gap-3"><div className="p-2 bg-blue-100 text-blue-600 rounded-xl"><Wallet size={20} /></div> {isEditing ? 'Edit Realisasi' : 'Input Rapat Baru'}</h2>
                   </div>
                   <form onSubmit={(e) => triggerSave(e, 'Sheet1')} className="p-6 md:p-8">
@@ -1312,7 +1343,7 @@ export default function App() {
                     </div>
 
                     <div className="flex flex-col gap-3">
-                      <button type="submit" disabled={loading || !formMamin.sub_kegiatan} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-[0_8px_20px_rgb(59,130,246,0.25)] hover:shadow-[0_10px_25px_rgb(59,130,246,0.35)] hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none transition-all duration-300"><Send size={18} /> {isEditing ? 'Simpan Perubahan' : 'Save'}</button>
+                      <button type="submit" disabled={loading || !formMamin.sub_kegiatan} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-[0_8px_20px_rgb(59,130,246,0.25)] hover:shadow-[0_10px_25px_rgb(59,130,246,0.35)] hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none transition-all duration-300"><Send size={18} /> Save</button>
                       {isEditing && <button type="button" onClick={cancelEdit} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-4 px-6 rounded-2xl transition-all">Batal Edit</button>}
                     </div>
                   </form>
@@ -1394,14 +1425,16 @@ export default function App() {
                                   return (
                                     <React.Fragment key={item.id}>
                                       <tr onClick={(e) => { e.stopPropagation(); toggleMaminRow(item.id); }} className={`cursor-pointer transition-colors group ${isRowExpanded ? 'bg-blue-50/40' : 'bg-white hover:bg-slate-50/80'}`}>
-                                        <td className="p-4 pl-8 md:pl-10 align-top">
-                                          <div className="flex items-start gap-3">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-slate-300 mt-2 shrink-0 group-hover:bg-blue-400 transition-colors"></div>
-                                            <div className="min-w-0 flex-1">
-                                              <div className="font-extrabold text-slate-700 text-sm md:text-base leading-snug break-words group-hover:text-blue-600 transition-colors">{item.nama_rapat}</div>
-                                              <div className="text-xs flex flex-wrap gap-2 items-center text-slate-500 mt-2">
-                                                <span className="bg-white border border-slate-200 shadow-sm px-2.5 py-1 rounded-lg text-[10px] uppercase font-bold text-slate-600 whitespace-nowrap">{String(item.tanggal_rapat).substring(0, 10)}</span>
-                                              </div>
+                                        <td className="p-4 pl-6 md:pl-8 align-top relative">
+                                          {/* Garis turunan list (Tree hierarchy) elegan */}
+                                          <div className={`absolute left-3 md:left-4 top-0 bottom-0 w-[2px] transition-colors duration-300 ${isRowExpanded ? 'bg-blue-300' : 'bg-slate-100 group-hover:bg-slate-200'}`}></div>
+                                          <div className={`absolute left-3 md:left-4 top-8 w-3 md:w-4 h-[2px] transition-colors duration-300 ${isRowExpanded ? 'bg-blue-300' : 'bg-slate-100 group-hover:bg-slate-200'}`}></div>
+                                          
+                                          <div className="flex flex-col min-w-0 pl-3">
+                                            {/* Font Normal/Medium, membedakan secara tegas dengan Sub Kegiatan yang Bold */}
+                                            <div className="font-medium text-slate-700 text-sm md:text-[15px] leading-snug group-hover:text-blue-600 transition-colors">{item.nama_rapat}</div>
+                                            <div className="text-xs flex flex-wrap gap-2 items-center text-slate-500 mt-2">
+                                              <span className="bg-white border border-slate-200 shadow-sm px-2 py-1 rounded-md text-[10px] uppercase font-bold text-slate-500 whitespace-nowrap flex items-center gap-1.5"><Calendar size={10}/> {String(item.tanggal_rapat).substring(0, 10)}</span>
                                             </div>
                                           </div>
                                         </td>
@@ -1413,7 +1446,7 @@ export default function App() {
                                             </div>
                                           ) : ( <span className="text-sm md:text-base bg-white border border-slate-200 shadow-sm px-3.5 py-1.5 rounded-xl whitespace-nowrap">{formatRibuan(item.jumlah_paket)}</span> )}
                                         </td>
-                                        <td className="p-4 text-right font-black text-blue-600 text-sm md:text-base whitespace-nowrap align-top"><AnimatedNominal value={item.realisasi_anggaran} /></td>
+                                        <td className="p-4 text-right font-black text-blue-600 text-sm md:text-[15px] whitespace-nowrap align-top"><AnimatedNominal value={item.realisasi_anggaran} /></td>
                                         <td className="p-4 align-top">
                                           <div className="flex justify-center gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
                                             <button onClick={(e) => { e.stopPropagation(); editData(item, 'Sheet1'); }} className="p-2 text-yellow-600 bg-yellow-50 rounded-xl hover:bg-yellow-100 hover:shadow-sm transition-all"><Edit size={16} strokeWidth={2.5}/></button>
@@ -1423,10 +1456,16 @@ export default function App() {
                                       </tr>
                                       {isRowExpanded && (
                                         <tr className="bg-slate-50/60 shadow-inner">
-                                          <td colSpan="4" className="p-0 border-b border-slate-200">
+                                          <td colSpan="4" className="p-0 border-b border-slate-200 relative">
+                                            {/* Lanjutan garis vertikal untuk rincian */}
+                                            <div className="absolute left-3 md:left-4 top-0 bottom-0 w-[2px] bg-blue-100"></div>
+                                            
                                             <div className="overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
-                                              <div className="m-4 ml-10 md:ml-12 border border-slate-200/60 rounded-2xl bg-white p-5 shadow-sm">
-                                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                                              <div className="m-4 mb-5 ml-10 md:ml-12 border border-slate-200/60 rounded-2xl bg-white p-5 shadow-md relative overflow-hidden">
+                                                {/* Garis Aksen Warna Kiri untuk kesan kotak modern */}
+                                                <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-blue-400 to-indigo-500"></div>
+                                                
+                                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 pl-2">
                                                   <div>
                                                     <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-4 flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> Informasi Rapat</h4>
                                                     <div className="space-y-3.5 text-sm text-slate-600 font-medium">
@@ -1478,7 +1517,7 @@ export default function App() {
               <div className="lg:col-span-5 2xl:col-span-4 anim-fade-up">
                 <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden sticky top-6">
                   
-                  <div className="p-5 border-b border-slate-100/50 flex justify-between items-center bg-slate-50/50 backdrop-blur-md">
+                  <div className="p-5 border-b border-slate-100/50 flex justify-between items-center bg-gradient-to-r from-slate-50 to-indigo-50/30 backdrop-blur-md">
                      <div className="flex w-full bg-slate-200/50 p-1 rounded-xl">
                        <button type="button" onClick={() => setPerdinMode('input')} className={`flex-1 px-4 py-2.5 text-[10px] sm:text-xs font-extrabold uppercase tracking-widest rounded-lg transition-all ${perdinMode === 'input' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Input Realisasi</button>
                        <button type="button" onClick={() => setPerdinMode('predict')} className={`flex-1 px-4 py-2.5 text-[10px] sm:text-xs font-extrabold uppercase tracking-widest rounded-lg transition-all ${perdinMode === 'predict' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Rencana Draft</button>
@@ -1668,7 +1707,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* PANEL KANAN: REKAP DAN RIWAYAT PERDIN */}
               <div className="lg:col-span-7 2xl:col-span-8 flex flex-col gap-6 anim-fade-right">
                 
                 <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-6 md:p-8">
