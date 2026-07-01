@@ -172,9 +172,16 @@ export default function App() {
   
   const [selectedYear, setSelectedYear] = useState('2026');
   
-  const [dataMamin, setDataMamin] = useState([]);
-  const [dataSub, setDataSub] = useState([]); 
-  const [dataPerdin, setDataPerdin] = useState([]); 
+  // --- STATE DENGAN LOCAL STORAGE CACHING UNTUK LOAD INSTAN ---
+  const [dataMamin, setDataMamin] = useState(() => {
+    try { const cache = localStorage.getItem('cache_mamin'); return cache ? JSON.parse(cache) : []; } catch(e) { return []; }
+  });
+  const [dataSub, setDataSub] = useState(() => {
+    try { const cache = localStorage.getItem('cache_sub'); return cache ? JSON.parse(cache) : []; } catch(e) { return []; }
+  }); 
+  const [dataPerdin, setDataPerdin] = useState(() => {
+    try { const cache = localStorage.getItem('cache_perdin'); return cache ? JSON.parse(cache) : []; } catch(e) { return []; }
+  }); 
   
   const currentMamin = dataMamin.filter(item => selectedYear === 'Semua' ? true : (item.tahun ? String(item.tahun) : '2026') === String(selectedYear));
   const currentSub = dataSub.filter(item => selectedYear === 'Semua' ? true : (item.tahun ? String(item.tahun) : '2026') === String(selectedYear));
@@ -333,12 +340,12 @@ export default function App() {
   const sisaSetelahPredict = sisaAnggaranPredict - totalDraftCost;
   const isPredictSafe = sisaSetelahPredict >= 0;
 
-  useEffect(() => { fetchData(); }, []);
   useEffect(() => { setFormSub(prev => ({ ...prev, tahun: selectedYear === 'Semua' ? '2026' : selectedYear })); }, [selectedYear]);
 
-  const fetchData = async (showLoader = true) => {
+  // --- PEMBARUAN: FUNGSI TARIK DATA DI LATAR BELAKANG DAN SIMPAN CACHE ---
+  const fetchData = async (showLoader = false) => {
     if (!SCRIPT_URL.startsWith('http')) return;
-    if (showLoader && isEntered) setIsRefreshing(true); 
+    if (showLoader) setIsRefreshing(true); 
     try {
       const [resMamin, resSub, resPerdin] = await Promise.all([
         fetch(`${SCRIPT_URL}?sheet=Sheet1`),
@@ -347,12 +354,32 @@ export default function App() {
       ]);
       const [jsonMamin, jsonSub, jsonPerdin] = await Promise.all([resMamin.json(), resSub.json(), resPerdin.json()]);
       
-      if (jsonMamin.status === 'success') setDataMamin(jsonMamin.data.map(i => Object.fromEntries(Object.entries(i).map(([k, v]) => [k.trim(), v]))));
-      if (jsonSub.status === 'success') setDataSub(jsonSub.data.map(i => Object.fromEntries(Object.entries(i).map(([k, v]) => [k.trim(), v]))));
-      if (jsonPerdin.status === 'success') setDataPerdin(jsonPerdin.data.map(i => Object.fromEntries(Object.entries(i).map(([k, v]) => [k.trim(), v]))));
-    } catch (error) { console.error('Fetch error:', error); }
-    if (showLoader && isEntered) setIsRefreshing(false);
+      if (jsonMamin.status === 'success') {
+        const formatted = jsonMamin.data.map(i => Object.fromEntries(Object.entries(i).map(([k, v]) => [k.trim(), v])));
+        setDataMamin(formatted);
+        localStorage.setItem('cache_mamin', JSON.stringify(formatted)); // Simpan Cache
+      }
+      if (jsonSub.status === 'success') {
+        const formatted = jsonSub.data.map(i => Object.fromEntries(Object.entries(i).map(([k, v]) => [k.trim(), v])));
+        setDataSub(formatted);
+        localStorage.setItem('cache_sub', JSON.stringify(formatted)); // Simpan Cache
+      }
+      if (jsonPerdin.status === 'success') {
+        const formatted = jsonPerdin.data.map(i => Object.fromEntries(Object.entries(i).map(([k, v]) => [k.trim(), v])));
+        setDataPerdin(formatted);
+        localStorage.setItem('cache_perdin', JSON.stringify(formatted)); // Simpan Cache
+      }
+    } catch (error) { 
+      console.error('Fetch error:', error); 
+    } finally {
+      if (showLoader) setIsRefreshing(false);
+    }
   };
+
+  // Panggil data DI BELAKANG LAYAR begitu aplikasi dibuka, tanpa animasi loading yang mengganggu
+  useEffect(() => { 
+    fetchData(false); 
+  }, []);
 
   const handleInputMamin = (e) => {
     const { name, value } = e.target;
@@ -443,6 +470,7 @@ export default function App() {
         method: 'POST', 
         body: JSON.stringify({ sheet: 'Perdin', action: 'update', data: updatedItem }) 
       });
+      fetchData(false); // Update cache quietly
     } catch (error) { 
       console.error('Error toggling status:', error); 
       setDataPerdin(prev => prev.map(p => p.id === item.id ? item : p));
@@ -532,6 +560,7 @@ export default function App() {
       const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
       const result = await res.json();
       
+      // Jika berhasil, perbarui data murni dari server secara background
       if (result.status === 'success') fetchData(false); 
       else { alert('Gagal sinkronisasi: ' + result.message); fetchData(false); }
     } catch (error) { 
@@ -1060,7 +1089,7 @@ export default function App() {
                       </div>
 
                       <div className="flex flex-col gap-3">
-                        <button type="submit" disabled={loading || !formDynamic.sub_kegiatan} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-[0_8px_20px_rgb(59,130,246,0.25)] hover:shadow-[0_10px_25px_rgb(59,130,246,0.35)] hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none transition-all duration-300"><Send size={18} /> {isEditing ? 'Simpan Perubahan' : 'Kirim Realisasi'}</button>
+                        <button type="submit" disabled={loading || !formDynamic.sub_kegiatan} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-[0_8px_20px_rgb(59,130,246,0.25)] hover:shadow-[0_10px_25px_rgb(59,130,246,0.35)] hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none transition-all duration-300"><Send size={18} /> Save</button>
                         {isEditing && <button type="button" onClick={cancelEdit} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-4 px-6 rounded-2xl transition-all">Batal Edit</button>}
                       </div>
                     </form>
@@ -1363,9 +1392,9 @@ export default function App() {
                       <thead className="bg-slate-50/80 text-slate-400 text-[10px] uppercase tracking-widest font-black">
                         <tr>
                           <th className="p-5 font-bold border-b border-slate-100">Informasi Rapat</th>
-                          <th className="p-5 text-center font-bold w-20 md:w-28 border-b border-slate-100">Qty</th>
-                          <th className="p-5 text-right font-bold w-28 md:w-40 border-b border-slate-100">Realisasi (Rp)</th>
-                          <th className="p-5 text-center font-bold w-20 md:w-24 border-b border-slate-100">Aksi</th>
+                          <th className="p-5 text-center font-bold w-20 md:w-28 border-b border-slate-100"></th>
+                          <th className="p-5 text-right font-bold w-28 md:w-40 border-b border-slate-100"></th>
+                          <th className="p-5 text-center font-bold w-20 md:w-24 border-b border-slate-100"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -1378,6 +1407,7 @@ export default function App() {
                             const subTotal = subItems.reduce((acc, curr) => acc + (parseFloat(curr.realisasi_anggaran) || 0), 0);
                             const subData = currentSub.find(s => s.nama_sub === subName);
                             const subPagu = subData ? getPaguKategori(subData, 'mamin') : 0;
+                            const subSisa = subPagu - subTotal; // Menghitung sisa nominal
 
                             return (
                               <React.Fragment key={subIdx}>
@@ -1390,14 +1420,18 @@ export default function App() {
                                           </div>
                                           <span className={`font-extrabold text-sm md:text-base ${isSubExpanded ? 'text-indigo-900' : 'text-slate-700'}`}>{subName}</span>
                                        </div>
-                                       <div className="flex items-center gap-6">
-                                          <div className="text-right hidden sm:block">
+                                       <div className="flex items-center gap-4 sm:gap-6">
+                                          <div className="text-right hidden lg:block">
                                              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pagu</div>
                                              <div className="font-bold text-slate-600"><AnimatedNominal value={subPagu} /></div>
                                           </div>
-                                          <div className="text-right">
-                                             <div className={`text-[10px] font-bold uppercase tracking-widest ${isSubExpanded ? 'text-indigo-400' : 'text-slate-400'}`}>Total Realisasi</div>
+                                          <div className="text-right hidden sm:block">
+                                             <div className={`text-[10px] font-bold uppercase tracking-widest ${isSubExpanded ? 'text-indigo-400' : 'text-slate-400'}`}>Realisasi</div>
                                              <div className={`font-black ${isSubExpanded ? 'text-indigo-700' : 'text-blue-600'}`}><AnimatedNominal value={subTotal} /></div>
+                                          </div>
+                                          <div className="text-right">
+                                             <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sisa Pagu</div>
+                                             <div className={`font-black ${subSisa < 0 ? 'text-red-500' : 'text-emerald-500'}`}><AnimatedNominal value={subSisa} /></div>
                                           </div>
                                        </div>
                                     </div>
